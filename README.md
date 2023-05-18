@@ -6,10 +6,6 @@
 ![Platforms](https://img.shields.io/badge/platform-mac%2C%20windows%2C%20linux-yellowgreen)
 [![Publish](https://github.com/frappe/books/actions/workflows/publish.yml/badge.svg)](https://github.com/frappe/books/actions/workflows/publish.yml)
 
-Free Desktop book-keeping software for small businesses and freelancers.
-
-[frappebooks.com](https://frappebooks.com/)
-
 <img src="https://user-images.githubusercontent.com/29507195/207267857-4ae48890-3fb2-4046-80cf-3256b46c72a0.png" alt="Frappe Books Preview"/>
 
 </div>
