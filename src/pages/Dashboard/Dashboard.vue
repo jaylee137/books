@@ -14,7 +14,7 @@
         <PeriodSelector
           class="px-3"
           :value="period"
-          :options="['This Year', 'This Quarter', 'This Month']"
+          :options="['This Year', 'This Quarter', 'This Month', 'YTD']"
           @change="(value) => (period = value)"
         />
       </div>
@@ -35,8 +35,8 @@
           <UnpaidInvoices
             :schema-name="'SalesInvoice'"
             :common-period="period"
-            @period-change="handlePeriodChange"
             class="border-e"
+            @period-change="handlePeriodChange"
           />
           <UnpaidInvoices
             :schema-name="'PurchaseInvoice'"

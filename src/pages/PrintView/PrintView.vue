@@ -1,45 +1,44 @@
 <template>
-  <div class="flex">
-    <div class="flex flex-col flex-1 bg-gray-25">
-      <PageHeader :border="true">
-        <template #left>
-          <AutoComplete
-            v-if="templateList.length"
-            :df="{
-              fieldtype: 'AutoComplete',
-              fieldname: 'templateName',
-              label: t`Template Name`,
-              options: templateList.map((n) => ({ label: n, value: n })),
-            }"
-            input-class="text-base py-0 h-8"
-            class="w-56"
-            :border="true"
-            :value="templateName ?? ''"
-            @change="onTemplateNameChange"
-          />
-        </template>
-        <DropdownWithActions :actions="actions" :title="t`More`" />
-        <Button class="text-xs" type="primary" @click="savePDF">
-          {{ t`Save as PDF` }}
-        </Button>
-      </PageHeader>
+  <div class="flex flex-col flex-1 bg-gray-25">
+    <PageHeader :border="true" :title="t`Print View`" class="bg-white">
+      <AutoComplete
+        v-if="templateList.length"
+        :df="{
+          fieldtype: 'AutoComplete',
+          fieldname: 'templateName',
+          label: t`Template Name`,
+          options: templateList.map((n) => ({ label: n, value: n })),
+        }"
+        input-class="text-base py-0 h-8"
+        class="w-40"
+        :border="true"
+        :value="templateName ?? ''"
+        @change="onTemplateNameChange"
+      />
+      <DropdownWithActions :actions="actions" :title="t`More`" />
+      <Button class="text-xs" type="primary" @click="savePDF">
+        {{ t`Save as PDF` }}
+      </Button>
+    </PageHeader>
 
-      <!-- Template Display Area -->
-      <div class="overflow-auto custom-scroll p-4">
-        <!-- Display Hints -->
-        <div v-if="helperMessage" class="text-sm text-gray-700">
-          {{ helperMessage }}
-        </div>
-
-        <!-- Template Container -->
-        <PrintContainer
-          ref="printContainer"
-          v-if="printProps"
-          :template="printProps.template"
-          :values="printProps.values"
-          :scale="scale"
-        />
+    <!-- Template Display Area -->
+    <div class="overflow-auto custom-scroll p-4">
+      <!-- Display Hints -->
+      <div v-if="helperMessage" class="text-sm text-gray-700">
+        {{ helperMessage }}
       </div>
+
+      <!-- Template Container -->
+      <PrintContainer
+        v-if="printProps"
+        ref="printContainer"
+        :print-schema-name="schemaName"
+        :template="printProps.template"
+        :values="printProps.values"
+        :scale="scale"
+        :width="templateDoc?.width"
+        :height="templateDoc?.height"
+      />
     </div>
   </div>
 </template>
@@ -55,6 +54,7 @@ import PageHeader from 'src/components/PageHeader.vue';
 import { handleErrorWithDialog } from 'src/errorHandling';
 import { fyo } from 'src/initFyo';
 import { getPrintTemplatePropValues } from 'src/utils/printTemplates';
+import { showSidebar } from 'src/utils/refs';
 import { PrintValues } from 'src/utils/types';
 import { getFormRoute, openSettings, routeTo } from 'src/utils/ui';
 import { defineComponent } from 'vue';
@@ -62,16 +62,16 @@ import PrintContainer from '../TemplateBuilder/PrintContainer.vue';
 
 export default defineComponent({
   name: 'PrintView',
-  props: {
-    schemaName: { type: String, required: true },
-    name: { type: String, required: true },
-  },
   components: {
     PageHeader,
     Button,
     AutoComplete,
     PrintContainer,
     DropdownWithActions,
+  },
+  props: {
+    schemaName: { type: String, required: true },
+    name: { type: String, required: true },
   },
   data() {
     return {
@@ -89,22 +89,6 @@ export default defineComponent({
       templateName: null | string;
       templateList: string[];
     };
-  },
-  async mounted() {
-    await this.initialize();
-    if (fyo.store.isDevelopment) {
-      // @ts-ignore
-      window.pv = this;
-    }
-  },
-  async activated() {
-    await this.initialize();
-  },
-  unmounted() {
-    this.reset();
-  },
-  deactivated() {
-    this.reset();
   },
   computed: {
     helperMessage() {
@@ -189,6 +173,22 @@ export default defineComponent({
       return actions;
     },
   },
+  async mounted() {
+    await this.initialize();
+    if (fyo.store.isDevelopment) {
+      // @ts-ignore
+      window.pv = this;
+    }
+  },
+  async activated() {
+    await this.initialize();
+  },
+  unmounted() {
+    this.reset();
+  },
+  deactivated() {
+    this.reset();
+  },
   methods: {
     async initialize() {
       this.doc = await fyo.doc.getDoc(this.schemaName, this.name);
@@ -202,11 +202,22 @@ export default defineComponent({
         this.values = await getPrintTemplatePropValues(this.doc as Doc);
       }
     },
+    setScale() {
+      this.scale = 1;
+      const width = (this.templateDoc?.width ?? 21) * 37.8;
+      let containerWidth = window.innerWidth - 32;
+      if (showSidebar.value) {
+        containerWidth -= 12 * 16;
+      }
+
+      this.scale = Math.min(containerWidth / width, 1);
+    },
     reset() {
       this.doc = null;
       this.values = null;
       this.templateList = [];
       this.templateDoc = null;
+      this.scale = 1;
     },
     async onTemplateNameChange(value: string | null): Promise<void> {
       if (!value) {
@@ -223,6 +234,7 @@ export default defineComponent({
       } catch (error) {
         await handleErrorWithDialog(error);
       }
+      this.setScale();
     },
     async setTemplateList(): Promise<void> {
       const list = (await this.fyo.db.getAllRaw(ModelNameEnum.PrintTemplate, {
@@ -233,14 +245,14 @@ export default defineComponent({
     },
     async savePDF() {
       const printContainer = this.$refs.printContainer as {
-        savePDF: (name?: string) => void;
+        savePDF: (name?: string) => Promise<void>;
       };
 
       if (!printContainer?.savePDF) {
         return;
       }
 
-      printContainer.savePDF(this.doc?.name);
+      await printContainer.savePDF(this.doc?.name);
     },
     async setTemplateFromDefault() {
       const defaultName =

@@ -10,7 +10,6 @@
         h-row-largest
         sticky
         top-0
-        border-b
         bg-white
       "
       style="z-index: 1"
@@ -28,7 +27,7 @@
     <!-- Linked Entry List -->
     <div
       v-if="sequence.length"
-      class="w-full overflow-y-auto custom-scroll"
+      class="w-full overflow-y-auto custom-scroll border-t"
       style="height: calc(100vh - var(--h-row-largest) - 1px)"
     >
       <div v-for="sn of sequence" :key="sn" class="border-b p-4">
@@ -173,11 +172,12 @@ import { PropType, defineComponent, inject } from 'vue';
 const COMPONENT_NAME = 'LinkedEntries';
 
 export default defineComponent({
+  components: { Button },
+  props: { doc: { type: Object as PropType<Doc>, required: true } },
+  emits: ['close'],
   setup() {
     return { shortcuts: inject(shortcutsKey) };
   },
-  emits: ['close'],
-  props: { doc: { type: Object as PropType<Doc>, required: true } },
   data() {
     return { entries: {} } as {
       entries: Record<
@@ -185,13 +185,6 @@ export default defineComponent({
         { collapsed: boolean; details: Record<string, unknown>[] }
       >;
     };
-  },
-  async mounted() {
-    await this.setLinkedEntries();
-    this.shortcuts?.set(COMPONENT_NAME, ['Escape'], () => this.$emit('close'));
-  },
-  unmounted() {
-    this.shortcuts?.delete(COMPONENT_NAME);
   },
   computed: {
     sequence(): string[] {
@@ -208,6 +201,13 @@ export default defineComponent({
 
       return seq;
     },
+  },
+  async mounted() {
+    await this.setLinkedEntries();
+    this.shortcuts?.set(COMPONENT_NAME, ['Escape'], () => this.$emit('close'));
+  },
+  unmounted() {
+    this.shortcuts?.delete(COMPONENT_NAME);
   },
   methods: {
     isPesa,
@@ -238,7 +238,6 @@ export default defineComponent({
       }
     },
   },
-  components: { Button },
 });
 
 const linkSequence = [

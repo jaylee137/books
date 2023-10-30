@@ -14,7 +14,7 @@
       </FormHeader>
 
       <!-- Section Container -->
-      <div class="overflow-auto custom-scroll" v-if="doc">
+      <div v-if="doc" class="overflow-auto custom-scroll">
         <CommonFormSection
           v-for="([name, fields], idx) in activeGroup.entries()"
           :key="name + idx"
@@ -32,6 +32,7 @@
 
       <!-- Tab Bar -->
       <div
+        v-if="groupedFields && groupedFields.size > 1"
         class="
           mt-auto
           px-4
@@ -44,21 +45,20 @@
           bottom-0
           bg-white
         "
-        v-if="groupedFields && groupedFields.size > 1"
       >
         <div
           v-for="key of groupedFields.keys()"
           :key="key"
-          @click="activeTab = key"
           class="text-sm cursor-pointer"
           :class="
             key === activeTab
-              ? 'text-blue-500 font-semibold border-t-2 border-blue-500'
-              : ''
+              ? 'text-gray-900 font-semibold border-t-2 border-gray-800'
+              : 'text-gray-700'
           "
           :style="{
             paddingTop: key === activeTab ? 'calc(1rem - 2px)' : '1rem',
           }"
+          @click="activeTab = key"
         >
           {{ tabLabels[key] }}
         </div>
@@ -80,7 +80,6 @@ import { getErrorMessage } from 'src/utils';
 import { evaluateHidden } from 'src/utils/doc';
 import { shortcutsKey } from 'src/utils/injectionKeys';
 import { showDialog } from 'src/utils/interactive';
-import { reloadWindow } from 'src/utils/ipcCalls';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
@@ -91,6 +90,9 @@ const COMPONENT_NAME = 'Settings';
 
 export default defineComponent({
   components: { FormContainer, Button, FormHeader, CommonFormSection },
+  provide() {
+    return { doc: computed(() => this.doc) };
+  },
   setup() {
     return {
       shortcuts: inject(shortcutsKey),
@@ -99,155 +101,24 @@ export default defineComponent({
   data() {
     return {
       errors: {},
-      canSave: false,
       activeTab: ModelNameEnum.AccountingSettings,
       groupedFields: null,
     } as {
       errors: Record<string, string>;
-      canSave: boolean;
       activeTab: string;
       groupedFields: null | UIGroupedFields;
     };
   },
-  provide() {
-    return { doc: computed(() => this.doc) };
-  },
-  mounted() {
-    if (this.fyo.store.isDevelopment) {
-      // @ts-ignore
-      window.settings = this;
-    }
-
-    this.update();
-  },
-  activated(): void {
-    const tab = this.$route.query.tab;
-    if (typeof tab === 'string' && this.tabLabels[tab]) {
-      this.activeTab = tab;
-    }
-
-    docsPathRef.value = docsPathMap.Settings ?? '';
-    this.shortcuts?.pmod.set(COMPONENT_NAME, ['KeyS'], () => {
-      if (!this.canSave) {
-        return;
-      }
-
-      this.sync();
-    });
-  },
-  async deactivated(): Promise<void> {
-    docsPathRef.value = '';
-    this.shortcuts?.delete(COMPONENT_NAME);
-    if (!this.canSave) {
-      return;
-    }
-    await this.reset();
-  },
-  methods: {
-    async reset() {
-      const resetableDocs = this.schemas
-        .map(({ name }) => this.fyo.singles[name])
-        .filter((doc) => doc?.dirty) as Doc[];
-
-      for (const doc of resetableDocs) {
-        await doc.load();
-      }
-
-      this.update();
-    },
-    async sync(): Promise<void> {
-      const syncableDocs = this.schemas
-        .map(({ name }) => this.fyo.singles[name])
-        .filter((doc) => doc?.canSave) as Doc[];
-
-      for (const doc of syncableDocs) {
-        await this.syncDoc(doc);
-      }
-
-      this.update();
-      showDialog({
-        title: this.t`Reload Frappe Books?`,
-        detail: this.t`Changes made to settings will be visible on reload.`,
-        type: 'info',
-        buttons: [
-          {
-            label: this.t`Yes`,
-            isPrimary: true,
-            action: reloadWindow,
-          },
-          {
-            label: this.t`No`,
-            action() {},
-            isEscape: true,
-          },
-        ],
-      });
-    },
-    async syncDoc(doc: Doc): Promise<void> {
-      try {
-        await doc.sync();
-        this.updateGroupedFields();
-      } catch (error) {
-        await handleErrorWithDialog(error, doc);
-      }
-    },
-    async onValueChange(field: Field, value: DocValue): Promise<void> {
-      const { fieldname } = field;
-      delete this.errors[fieldname];
-
-      try {
-        await this.doc?.set(fieldname, value);
-      } catch (err) {
-        if (!(err instanceof Error)) {
-          return;
-        }
-
-        this.errors[fieldname] = getErrorMessage(err, this.doc ?? undefined);
-      }
-
-      this.update();
-    },
-    update(): void {
-      this.updateCanSave();
-      this.updateGroupedFields();
-    },
-    updateCanSave(): void {
-      this.canSave = this.schemas
-        .map(({ name }) => this.fyo.singles[name]?.canSave)
-        .some(Boolean);
-    },
-    updateGroupedFields(): void {
-      const grouped: UIGroupedFields = new Map();
-      const fields: Field[] = this.schemas.map((s) => s.fields).flat();
-
-      for (const field of fields) {
-        const schemaName = field.schemaName!;
-        if (!grouped.has(schemaName)) {
-          grouped.set(schemaName, new Map());
-        }
-
-        const tabbed = grouped.get(schemaName)!;
-        const section = field.section ?? this.t`Miscellaneous`;
-        if (!tabbed.has(section)) {
-          tabbed.set(section, []);
-        }
-
-        if (field.meta) {
-          continue;
-        }
-
-        const doc = this.fyo.singles[schemaName];
-        if (evaluateHidden(field, doc)) {
-          continue;
-        }
-
-        tabbed.get(section)!.push(field);
-      }
-
-      this.groupedFields = grouped;
-    },
-  },
   computed: {
+    canSave() {
+      return [
+        ModelNameEnum.AccountingSettings,
+        ModelNameEnum.InventorySettings,
+        ModelNameEnum.Defaults,
+        ModelNameEnum.PrintSettings,
+        ModelNameEnum.SystemSettings,
+      ].some((s) => this.fyo.singles[s]?.canSave);
+    },
     doc(): Doc | null {
       const doc = this.fyo.singles[this.activeTab];
       if (!doc) {
@@ -294,6 +165,135 @@ export default defineComponent({
       }
 
       return group;
+    },
+  },
+  mounted() {
+    if (this.fyo.store.isDevelopment) {
+      // @ts-ignore
+      window.settings = this;
+    }
+
+    this.update();
+  },
+  activated(): void {
+    const tab = this.$route.query.tab;
+    if (typeof tab === 'string' && this.tabLabels[tab]) {
+      this.activeTab = tab;
+    }
+
+    docsPathRef.value = docsPathMap.Settings ?? '';
+    this.shortcuts?.pmod.set(COMPONENT_NAME, ['KeyS'], async () => {
+      if (!this.canSave) {
+        return;
+      }
+
+      await this.sync();
+    });
+  },
+  async deactivated(): Promise<void> {
+    docsPathRef.value = '';
+    this.shortcuts?.delete(COMPONENT_NAME);
+    if (!this.canSave) {
+      return;
+    }
+    await this.reset();
+  },
+  methods: {
+    async reset() {
+      const resetableDocs = this.schemas
+        .map(({ name }) => this.fyo.singles[name])
+        .filter((doc) => doc?.dirty) as Doc[];
+
+      for (const doc of resetableDocs) {
+        await doc.load();
+      }
+
+      this.update();
+    },
+    async sync(): Promise<void> {
+      const syncableDocs = this.schemas
+        .map(({ name }) => this.fyo.singles[name])
+        .filter((doc) => doc?.canSave) as Doc[];
+
+      for (const doc of syncableDocs) {
+        await this.syncDoc(doc);
+      }
+
+      this.update();
+      await showDialog({
+        title: this.t`Reload Frappe Books?`,
+        detail: this.t`Changes made to settings will be visible on reload.`,
+        type: 'info',
+        buttons: [
+          {
+            label: this.t`Yes`,
+            isPrimary: true,
+            action: ipc.reloadWindow.bind(ipc),
+          },
+          {
+            label: this.t`No`,
+            action: () => null,
+            isEscape: true,
+          },
+        ],
+      });
+    },
+    async syncDoc(doc: Doc): Promise<void> {
+      try {
+        await doc.sync();
+        this.updateGroupedFields();
+      } catch (error) {
+        await handleErrorWithDialog(error, doc);
+      }
+    },
+    async onValueChange(field: Field, value: DocValue): Promise<void> {
+      const { fieldname } = field;
+      delete this.errors[fieldname];
+
+      try {
+        await this.doc?.set(fieldname, value);
+      } catch (err) {
+        if (!(err instanceof Error)) {
+          return;
+        }
+
+        this.errors[fieldname] = getErrorMessage(err, this.doc ?? undefined);
+      }
+
+      this.update();
+    },
+    update(): void {
+      this.updateGroupedFields();
+    },
+    updateGroupedFields(): void {
+      const grouped: UIGroupedFields = new Map();
+      const fields: Field[] = this.schemas.map((s) => s.fields).flat();
+
+      for (const field of fields) {
+        const schemaName = field.schemaName!;
+        if (!grouped.has(schemaName)) {
+          grouped.set(schemaName, new Map());
+        }
+
+        const tabbed = grouped.get(schemaName)!;
+        const section = field.section ?? this.t`Miscellaneous`;
+        if (!tabbed.has(section)) {
+          tabbed.set(section, []);
+        }
+
+        if (field.meta) {
+          continue;
+        }
+
+        const doc = this.fyo.singles[schemaName];
+        if (evaluateHidden(field, doc)) {
+          continue;
+        }
+
+        tabbed.get(section)!.push(field);
+      }
+
+      this.groupedFields = grouped;
     },
   },
 });

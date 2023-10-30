@@ -5,11 +5,15 @@ import GetStarted from 'src/pages/GetStarted.vue';
 import ImportWizard from 'src/pages/ImportWizard.vue';
 import ListView from 'src/pages/ListView/ListView.vue';
 import PrintView from 'src/pages/PrintView/PrintView.vue';
+import ReportPrintView from 'src/pages/PrintView/ReportPrintView.vue';
 import QuickEditForm from 'src/pages/QuickEditForm.vue';
 import Report from 'src/pages/Report.vue';
 import Settings from 'src/pages/Settings/Settings.vue';
 import TemplateBuilder from 'src/pages/TemplateBuilder/TemplateBuilder.vue';
+import CustomizeForm from 'src/pages/CustomizeForm/CustomizeForm.vue';
+import type { HistoryState } from 'vue-router';
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
+import { historyState } from './utils/refs';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -69,6 +73,12 @@ const routes: RouteRecordRaw[] = [
     props: true,
   },
   {
+    path: '/report-print/:reportName',
+    name: 'ReportPrintView',
+    component: ReportPrintView,
+    props: true,
+  },
+  {
     path: '/report/:reportClassName',
     name: 'Report',
     component: Report,
@@ -98,6 +108,11 @@ const routes: RouteRecordRaw[] = [
     props: true,
   },
   {
+    path: '/customize-form',
+    name: 'Customize Form',
+    component: CustomizeForm,
+  },
+  {
     path: '/settings',
     name: 'Settings',
     components: {
@@ -112,4 +127,17 @@ const routes: RouteRecordRaw[] = [
 ];
 
 const router = createRouter({ routes, history: createWebHistory() });
+
+router.afterEach(({ fullPath }) => {
+  const state = history.state as HistoryState;
+  historyState.forward = !!state.forward;
+  historyState.back = !!state.back;
+
+  if (fullPath.includes('index.html')) {
+    return;
+  }
+
+  localStorage.setItem('lastRoute', fullPath);
+});
+
 export default router;

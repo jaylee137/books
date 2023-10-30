@@ -12,7 +12,7 @@
       </FormHeader>
 
       <!-- Section Container -->
-      <div class="overflow-auto custom-scroll" v-if="hasDoc">
+      <div v-if="hasDoc" class="overflow-auto custom-scroll">
         <CommonFormSection
           v-for="([name, fields], idx) in activeGroup.entries()"
           :key="name + idx"
@@ -47,7 +47,7 @@
         <p v-if="loading" class="text-base text-gray-600">
           {{ t`Loading instance...` }}
         </p>
-        <Button v-if="!loading" class="w-24" @click="$emit('setup-canceled')">{{
+        <Button v-if="!loading" class="w-24" @click="cancel">{{
           t`Cancel`
         }}</Button>
         <Button
@@ -55,11 +55,12 @@
           class="w-24 ml-auto mr-4"
           :disabled="loading"
           @click="fill"
-          >Fill</Button
+          >{{ t`Fill` }}</Button
         >
         <Button
           type="primary"
           class="w-24"
+          data-testid="submit-button"
           :disabled="!areAllValuesFilled || loading"
           @click="submit"
           >{{ t`Submit` }}</Button
@@ -71,6 +72,9 @@
 <script lang="ts">
 import { DocValue } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
+import { Verb } from 'fyo/telemetry/types';
+import { TranslationString } from 'fyo/utils/translation';
+import { ModelNameEnum } from 'models/types';
 import { Field } from 'schemas/types';
 import Button from 'src/components/Button.vue';
 import FormContainer from 'src/components/FormContainer.vue';
@@ -84,6 +88,17 @@ import CommonFormSection from '../CommonForm/CommonFormSection.vue';
 
 export default defineComponent({
   name: 'SetupWizard',
+  components: {
+    Button,
+    FormContainer,
+    FormHeader,
+    CommonFormSection,
+  },
+  provide() {
+    return {
+      doc: computed(() => this.docOrNull),
+    };
+  },
   emits: ['setup-complete', 'setup-canceled'],
   data() {
     return {
@@ -95,75 +110,6 @@ export default defineComponent({
       docOrNull: null | Doc;
       loading: boolean;
     };
-  },
-  provide() {
-    return {
-      doc: computed(() => this.docOrNull),
-    };
-  },
-  components: {
-    Button,
-    FormContainer,
-    FormHeader,
-    CommonFormSection,
-  },
-  async mounted() {
-    this.docOrNull = getSetupWizardDoc();
-    if (!this.fyo.db.isConnected) {
-      await this.fyo.db.init();
-    }
-
-    if (this.fyo.store.isDevelopment) {
-      // @ts-ignore
-      window.sw = this;
-    }
-  },
-  methods: {
-    async fill() {
-      if (!this.hasDoc) {
-        return;
-      }
-
-      await this.doc.set('companyName', "Lin's Things");
-      await this.doc.set('email', 'lin@lthings.com');
-      await this.doc.set('fullname', 'Lin Slovenly');
-      await this.doc.set('bankName', 'Max Finance');
-      await this.doc.set('country', 'India');
-    },
-    async onValueChange(field: Field, value: DocValue) {
-      if (!this.hasDoc) {
-        return;
-      }
-
-      const { fieldname } = field;
-      delete this.errors[fieldname];
-
-      try {
-        await this.doc.set(fieldname, value);
-      } catch (err) {
-        if (!(err instanceof Error)) {
-          return;
-        }
-
-        this.errors[fieldname] = getErrorMessage(err, this.doc as Doc);
-      }
-    },
-    async submit() {
-      if (!this.hasDoc) {
-        return;
-      }
-
-      if (!this.areAllValuesFilled) {
-        return await showDialog({
-          title: this.t`Mandatory Error`,
-          detail: this.t`Please fill all values.`,
-          type: 'error',
-        });
-      }
-
-      this.loading = true;
-      this.$emit('setup-complete', this.doc.getValidDict());
-    },
   },
   computed: {
     hasDoc(): boolean {
@@ -198,6 +144,71 @@ export default defineComponent({
       );
 
       return [...groupedFields.values()][0];
+    },
+  },
+  async mounted() {
+    const languageMap = TranslationString.prototype.languageMap;
+    this.docOrNull = getSetupWizardDoc(languageMap);
+    if (!this.fyo.db.isConnected) {
+      await this.fyo.db.init();
+    }
+
+    if (this.fyo.store.isDevelopment) {
+      // @ts-ignore
+      window.sw = this;
+    }
+    this.fyo.telemetry.log(Verb.Started, ModelNameEnum.SetupWizard);
+  },
+  methods: {
+    async fill() {
+      if (!this.hasDoc) {
+        return;
+      }
+
+      await this.doc.set('companyName', "Lin's Things");
+      await this.doc.set('email', 'lin@lthings.com');
+      await this.doc.set('fullname', 'Lin Slovenly');
+      await this.doc.set('bankName', 'Max Finance');
+      await this.doc.set('country', 'India');
+    },
+    async onValueChange(field: Field, value: DocValue) {
+      if (!this.hasDoc) {
+        return;
+      }
+
+      const { fieldname } = field;
+      delete this.errors[fieldname];
+
+      try {
+        await this.doc.set(fieldname, value);
+      } catch (err) {
+        if (!(err instanceof Error)) {
+          return;
+        }
+
+        this.errors[fieldname] = getErrorMessage(err, this.doc);
+      }
+    },
+    async submit() {
+      if (!this.hasDoc) {
+        return;
+      }
+
+      if (!this.areAllValuesFilled) {
+        return await showDialog({
+          title: this.t`Mandatory Error`,
+          detail: this.t`Please fill all values.`,
+          type: 'error',
+        });
+      }
+
+      this.loading = true;
+      this.fyo.telemetry.log(Verb.Completed, ModelNameEnum.SetupWizard);
+      this.$emit('setup-complete', this.doc.getValidDict());
+    },
+    cancel() {
+      this.fyo.telemetry.log(Verb.Cancelled, ModelNameEnum.SetupWizard);
+      this.$emit('setup-canceled');
     },
   },
 });

@@ -1,6 +1,9 @@
 <template>
   <div class="overflow-hidden" :style="outerContainerStyle">
-    <div :style="innerContainerStyle">
+    <div
+      :style="innerContainerStyle"
+      :class="showOverflow ? 'overflow-auto no-scrollbar' : ''"
+    >
       <slot></slot>
     </div>
   </div>
@@ -18,20 +21,21 @@ import { defineComponent } from 'vue';
 
 export default defineComponent({
   props: {
-    height: { type: String, default: '29.7cm' },
-    width: { type: String, default: '21cm' },
+    height: { type: Number, default: 29.7 },
+    width: { type: Number, default: 21 },
     scale: { type: Number, default: 0.65 },
+    showOverflow: { type: Boolean, default: false },
   },
   computed: {
     innerContainerStyle(): Record<string, string> {
       const style: Record<string, string> = {};
-      style['width'] = this.width;
-      style['height'] = this.height;
+      style['width'] = `${this.width}cm`;
+      style['height'] = `${this.height}cm`;
       style['transform'] = `scale(${this.scale})`;
-      style['margin-top'] = `calc(-1 * (${this.height} * ${
+      style['margin-top'] = `calc(-1 * (${this.height}cm * ${
         1 - this.scale
       }) / 2)`;
-      style['margin-left'] = `calc(-1 * (${this.width} * ${
+      style['margin-left'] = `calc(-1 * (${this.width}cm * ${
         1 - this.scale
       }) / 2)`;
 
@@ -39,8 +43,8 @@ export default defineComponent({
     },
     outerContainerStyle(): Record<string, string> {
       const style: Record<string, string> = {};
-      style['height'] = `calc(${this.scale} * ${this.height})`;
-      style['width'] = `calc(${this.scale} * ${this.width})`;
+      style['height'] = `calc(${this.scale} * ${this.height}cm)`;
+      style['width'] = `calc(${this.scale} * ${this.width}cm)`;
 
       return style;
     },

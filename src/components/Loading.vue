@@ -1,12 +1,13 @@
 <template>
   <div
+    v-if="open && !close"
     class="absolute bottom-0 flex justify-end pb-6 pe-6"
     :style="{ width: fullWidth ? '100%' : 'calc(100% - 12rem)' }"
-    v-if="open && !close"
   >
     <!-- Loading Continer -->
     <div
       class="
+        border
         text-gray-900
         shadow-lg
         px-3
@@ -19,7 +20,7 @@
       "
     >
       <!-- Message -->
-      <p class="text-base text-gray-600 pb-2" v-if="message?.length">
+      <p v-if="message?.length" class="text-base text-gray-600 pb-2">
         {{ message }}
       </p>
 
@@ -33,7 +34,7 @@
           <!-- Loading Bar -->
           <div
             v-if="percent >= 0"
-            class="h-3 rounded bg-blue-400"
+            class="h-3 rounded bg-gray-800"
             :style="{ width: `${percent * 100}%` }"
           ></div>
         </div>

@@ -1,12 +1,9 @@
-import { ipcRenderer } from 'electron';
 import { handleError } from 'src/errorHandling';
 import { fyo } from 'src/initFyo';
-import { IPC_CHANNELS } from 'utils/messages';
 
 export default function registerIpcRendererListeners() {
-  ipcRenderer.on(
-    IPC_CHANNELS.LOG_MAIN_PROCESS_ERROR,
-    async (_, error, more) => {
+  ipc.registerMainProcessErrorListener(
+    (_, error: unknown, more?: Record<string, unknown>) => {
       if (!(error instanceof Error)) {
         throw error;
       }
@@ -22,23 +19,26 @@ export default function registerIpcRendererListeners() {
       more.isMainProcess = true;
       more.notifyUser ??= true;
 
-      await handleError(true, error, more, more.notifyUser);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      handleError(true, error, more, !!more.notifyUser);
     }
   );
 
-  ipcRenderer.on(IPC_CHANNELS.CONSOLE_LOG, (_, ...stuff: unknown[]) => {
+  ipc.registerConsoleLogListener((_, ...stuff: unknown[]) => {
     if (!fyo.store.isDevelopment) {
       return;
     }
 
     if (fyo.store.isDevelopment) {
+      // eslint-disable-next-line no-console
       console.log(...stuff);
     }
   });
 
-  document.addEventListener('visibilitychange', function () {
+  document.addEventListener('visibilitychange', () => {
     const { visibilityState } = document;
     if (visibilityState === 'visible' && !fyo.telemetry.started) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       fyo.telemetry.start();
     }
 

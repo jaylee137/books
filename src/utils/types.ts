@@ -51,7 +51,7 @@ export interface SidebarRoot {
   route: string;
   icon: string;
   iconSize?: string;
-  iconHeight?: string;
+  iconHeight?: number;
   hidden?: () => boolean;
   items?: SidebarItem[];
   filters?: QueryFilter;
@@ -90,7 +90,7 @@ export type ActionGroup = {
 export type DropdownItem = {
   label: string;
   value?: string;
-  action?: Function;
+  action?: () => unknown;
   group?: string;
   component?: { template: string };
   isGroup?: boolean;
@@ -98,7 +98,7 @@ export type DropdownItem = {
 
 export type UIGroupedFields = Map<string, Map<string, Field[]>>;
 export type ExportFormat = 'csv' | 'json';
-export type PeriodKey = 'This Year' | 'This Quarter' | 'This Month';
+export type PeriodKey = 'This Year' | 'This Quarter' | 'This Month' | 'YTD';
 
 export type PrintValues = {
   print: Record<string, unknown>;
@@ -108,13 +108,26 @@ export type PrintValues = {
 export interface DialogOptions {
   title: string;
   type?: ToastType;
-  detail?: string;
+  detail?: string | string[];
   buttons?: DialogButton[];
 }
 
 export type DialogButton = {
   label: string;
-  action: () => any;
+  action: () => unknown;
   isPrimary?: boolean;
   isEscape?: boolean;
+};
+
+export type GetStartedConfigItem = {
+  label: string;
+  items: {
+    key: string;
+    label: string;
+    icon: string;
+    description: string;
+    fieldname: string;
+    documentation?: string;
+    action?: () => void;
+  }[];
 };

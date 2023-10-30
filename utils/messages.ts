@@ -19,11 +19,13 @@ export enum IPC_ACTIONS {
   SEND_ERROR = 'send-error',
   GET_LANGUAGE_MAP = 'get-language-map',
   CHECK_FOR_UPDATES = 'check-for-updates',
+  CHECK_DB_ACCESS = 'check-db-access',
   SELECT_FILE = 'select-file',
   GET_CREDS = 'get-creds',
   GET_DB_LIST = 'get-db-list',
   GET_TEMPLATES = 'get-templates',
   DELETE_FILE = 'delete-file',
+  GET_DB_DEFAULT_PATH = 'get-db-default-path',
   // Database messages
   DB_CREATE = 'db-create',
   DB_CONNECT = 'db-connect',

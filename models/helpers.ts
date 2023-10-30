@@ -9,10 +9,7 @@ import {
   AccountRootType,
   AccountRootTypeEnum,
 } from './baseModels/Account/types';
-import {
-  Defaults,
-  numberSeriesDefaultsMap,
-} from './baseModels/Defaults/Defaults';
+import { numberSeriesDefaultsMap } from './baseModels/Defaults/Defaults';
 import { Invoice } from './baseModels/Invoice/Invoice';
 import { StockMovement } from './inventory/StockMovement';
 import { StockTransfer } from './inventory/StockTransfer';
@@ -26,6 +23,18 @@ export function getInvoiceActions(
     getMakePaymentAction(fyo),
     getMakeStockTransferAction(fyo, schemaName),
     getLedgerLinkAction(fyo),
+  ];
+}
+
+export function getStockTransferActions(
+  fyo: Fyo,
+  schemaName: ModelNameEnum.Shipment | ModelNameEnum.PurchaseReceipt
+): Action[] {
+  return [
+    getMakeInvoiceAction(fyo, schemaName),
+    getLedgerLinkAction(fyo, false),
+    getLedgerLinkAction(fyo, true),
+    getMakeReturnDocAction(fyo),
   ];
 }
 
@@ -44,12 +53,38 @@ export function getMakeStockTransferAction(
     condition: (doc: Doc) => doc.isSubmitted && !!doc.stockNotTransferred,
     action: async (doc: Doc) => {
       const transfer = await (doc as Invoice).getStockTransfer();
-      if (!transfer) {
+      if (!transfer || !transfer.name) {
         return;
       }
 
       const { routeTo } = await import('src/utils/ui');
       const path = `/edit/${transfer.schemaName}/${transfer.name}`;
+      await routeTo(path);
+    },
+  };
+}
+
+export function getMakeInvoiceAction(
+  fyo: Fyo,
+  schemaName: ModelNameEnum.Shipment | ModelNameEnum.PurchaseReceipt
+): Action {
+  let label = fyo.t`Sales Invoice`;
+  if (schemaName === ModelNameEnum.PurchaseReceipt) {
+    label = fyo.t`Purchase Invoice`;
+  }
+
+  return {
+    label,
+    group: fyo.t`Create`,
+    condition: (doc: Doc) => doc.isSubmitted && !doc.backReference,
+    action: async (doc: Doc) => {
+      const invoice = await (doc as StockTransfer).getInvoice();
+      if (!invoice || !invoice.name) {
+        return;
+      }
+
+      const { routeTo } = await import('src/utils/ui');
+      const path = `/edit/${invoice.schemaName}/${invoice.name}`;
       await routeTo(path);
     },
   };
@@ -91,10 +126,7 @@ export function getMakePaymentAction(fyo: Fyo): Action {
   };
 }
 
-export function getLedgerLinkAction(
-  fyo: Fyo,
-  isStock: boolean = false
-): Action {
+export function getLedgerLinkAction(fyo: Fyo, isStock = false): Action {
   let label = fyo.t`Accounting Entries`;
   let reportClassName: 'GeneralLedger' | 'StockLedger' = 'GeneralLedger';
 
@@ -109,7 +141,7 @@ export function getLedgerLinkAction(
     condition: (doc: Doc) => doc.isSubmitted,
     action: async (doc: Doc, router: Router) => {
       const route = getLedgerLink(doc, reportClassName);
-      router.push(route);
+      await router.push(route);
     },
   };
 }
@@ -129,6 +161,26 @@ export function getLedgerLink(
     },
   };
 }
+export function getMakeReturnDocAction(fyo: Fyo): Action {
+  return {
+    label: fyo.t`Return`,
+    group: fyo.t`Create`,
+    condition: (doc: Doc) =>
+      !!fyo.singles.InventorySettings?.enableStockReturns &&
+      doc.isSubmitted &&
+      !doc.isReturn,
+    action: async (doc: Doc) => {
+      const returnDoc = await (doc as StockTransfer)?.getReturnDoc();
+      if (!returnDoc || !returnDoc.name) {
+        return;
+      }
+
+      const { routeTo } = await import('src/utils/ui');
+      const path = `/edit/${doc.schemaName}/${returnDoc.name}`;
+      await routeTo(path);
+    },
+  };
+}
 
 export function getTransactionStatusColumn(): ColumnConfig {
   return {
@@ -137,7 +189,7 @@ export function getTransactionStatusColumn(): ColumnConfig {
     fieldtype: 'Select',
     render(doc) {
       const status = getDocStatus(doc) as InvoiceStatus;
-      const color = statusColor[status];
+      const color = statusColor[status] ?? 'gray';
       const label = getStatusText(status);
 
       return {
@@ -159,6 +211,8 @@ export const statusColor: Record<
   NotSaved: 'gray',
   Submitted: 'green',
   Cancelled: 'red',
+  Return: 'green',
+  ReturnIssued: 'green',
 };
 
 export function getStatusText(status: DocStatus | InvoiceStatus): string {
@@ -177,6 +231,10 @@ export function getStatusText(status: DocStatus | InvoiceStatus): string {
       return t`Paid`;
     case 'Unpaid':
       return t`Unpaid`;
+    case 'Return':
+      return t`Return`;
+    case 'ReturnIssued':
+      return t`Return Issued`;
     default:
       return '';
   }
@@ -211,6 +269,20 @@ function getSubmittableDocStatus(doc: RenderData | Doc) {
     )
   ) {
     return getInvoiceStatus(doc);
+  }
+
+  if (
+    [ModelNameEnum.Shipment, ModelNameEnum.PurchaseReceipt].includes(
+      doc.schema.name as ModelNameEnum
+    )
+  ) {
+    if (!!doc.returnAgainst && doc.submitted && !doc.cancelled) {
+      return 'Return';
+    }
+
+    if (doc.isReturned && doc.submitted && !doc.cancelled) {
+      return 'ReturnIssued';
+    }
   }
 
   if (!!doc.submitted && !doc.cancelled) {
@@ -288,6 +360,49 @@ export function getSerialNumberStatusText(status: string): string {
   }
 }
 
+export function getPriceListStatusColumn(): ColumnConfig {
+  return {
+    label: t`Enabled For`,
+    fieldname: 'enabledFor',
+    fieldtype: 'Select',
+    render({ isSales, isPurchase }) {
+      let status = t`None`;
+
+      if (isSales && isPurchase) {
+        status = t`Sales and Purchase`;
+      } else if (isSales) {
+        status = t`Sales`;
+      } else if (isPurchase) {
+        status = t`Purchase`;
+      }
+
+      return {
+        template: `<Badge class="text-xs" color="gray">${status}</Badge>`,
+      };
+    },
+  };
+}
+
+export function getPriceListEnabledColumn(): ColumnConfig {
+  return {
+    label: t`Enabled`,
+    fieldname: 'enabled',
+    fieldtype: 'Data',
+    render(doc) {
+      let status = t`Disabled`;
+      let color = 'orange';
+      if (doc.isEnabled) {
+        status = t`Enabled`;
+        color = 'green';
+      }
+
+      return {
+        template: `<Badge class="text-xs" color="${color}">${status}</Badge>`,
+      };
+    },
+  };
+}
+
 export async function getExchangeRate({
   fromCurrency,
   toCurrency,
@@ -309,9 +424,7 @@ export async function getExchangeRate({
 
   let exchangeRate = 0;
   if (localStorage) {
-    exchangeRate = safeParseFloat(
-      localStorage.getItem(cacheKey as string) as string
-    );
+    exchangeRate = safeParseFloat(localStorage.getItem(cacheKey) as string);
   }
 
   if (exchangeRate && exchangeRate !== 1) {
@@ -322,9 +435,14 @@ export async function getExchangeRate({
     const res = await fetch(
       `https://api.vatcomply.com/rates?date=${date}&base=${fromCurrency}&symbols=${toCurrency}`
     );
-    const data = await res.json();
+    const data = (await res.json()) as {
+      base: string;
+      data: string;
+      rates: Record<string, number>;
+    };
     exchangeRate = data.rates[toCurrency];
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error(error);
     exchangeRate ??= 1;
   }
@@ -359,7 +477,7 @@ export function getNumberSeries(schemaName: string, fyo: Fyo) {
     return undefined;
   }
 
-  const defaults = fyo.singles.Defaults as Defaults | undefined;
+  const defaults = fyo.singles.Defaults;
   const field = fyo.getField(schemaName, 'numberSeries');
   const value = defaults?.[numberSeriesKey] as string | undefined;
   return value ?? (field?.default as string | undefined);

@@ -1,6 +1,6 @@
-import { Field, RawValue } from '../../schemas/types';
-import DatabaseCore from './core';
-import { DatabaseManager } from './manager';
+import type { Field, FieldType, RawValue } from '../../schemas/types';
+import type DatabaseCore from './core';
+import type { DatabaseManager } from './manager';
 
 export interface GetQueryBuilderOptions {
   offset?: number;
@@ -15,6 +15,30 @@ export type FieldValueMap = Record<
   string,
   RawValue | undefined | FieldValueMap[]
 >;
+
+export type AlterConfig = {
+  schemaName: string;
+  diff: ColumnDiff;
+  newForeignKeys: Field[];
+};
+
+export type NonExtantConfig = {
+  schemaName: string;
+  nonExtant: {
+    fieldname: string;
+    value: RawValue;
+  }[];
+};
+
+export type UpdateSinglesConfig = {
+  update: string[];
+  updateNonExtant: NonExtantConfig[];
+};
+
+export type MigrationConfig = {
+  pre?: () => Promise<void> | void;
+  post?: () => Promise<void> | void;
+};
 
 export interface Patch {
   name: string;
@@ -50,8 +74,23 @@ export type BespokeFunction = (
   db: DatabaseCore,
   ...args: unknown[]
 ) => Promise<unknown>;
+
 export type SingleValue<T> = {
   fieldname: string;
   parent: string;
   value: T;
 }[];
+
+export type RawCustomField = {
+  parent: string;
+  label: string;
+  fieldname: string;
+  fieldtype: FieldType;
+  isRequired?: boolean;
+  section?: string;
+  tab?: string;
+  options?: string;
+  target?: string;
+  references?: string;
+  default?: string;
+};

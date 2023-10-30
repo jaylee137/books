@@ -14,6 +14,7 @@
         "
       >
         <h6
+          data-testid="company-name"
           class="
             font-semibold
             whitespace-nowrap
@@ -32,7 +33,7 @@
           class="px-4 flex items-center cursor-pointer hover:bg-gray-100 h-10"
           :class="
             isGroupActive(group) && !group.items
-              ? 'bg-gray-100 border-s-4 border-blue-500'
+              ? 'bg-gray-100 border-s-4 border-gray-800'
               : ''
           "
           @click="routeToSidebarItem(group)"
@@ -41,13 +42,13 @@
             class="flex-shrink-0"
             :name="group.icon"
             :size="group.iconSize || '18'"
-            :height="group.iconHeight"
-            :active="isGroupActive(group)"
+            :height="group.iconHeight ?? 0"
+            :active="!!isGroupActive(group)"
             :class="isGroupActive(group) && !group.items ? '-ms-1' : ''"
           />
           <div
-            class="ms-2 text-lg text-gray-900"
-            :class="isGroupActive(group) && !group.items && 'text-blue-600'"
+            class="ms-2 text-lg text-gray-700"
+            :class="isGroupActive(group) && !group.items && 'text-gray-900'"
           >
             {{ group.label }}
           </div>
@@ -59,7 +60,7 @@
             v-for="item in group.items"
             :key="item.label"
             class="
-              text-base text-gray-800
+              text-base
               h-10
               ps-10
               cursor-pointer
@@ -69,8 +70,8 @@
             "
             :class="
               isItemActive(item)
-                ? 'bg-gray-100 text-blue-600 border-s-4 border-blue-500'
-                : ''
+                ? 'bg-gray-100 text-gray-900 border-s-4 border-gray-800'
+                : 'text-gray-700'
             "
             @click="routeToSidebarItem(item)"
           >
@@ -115,6 +116,7 @@
       </button>
 
       <button
+        data-testid="change-db"
         class="
           flex
           text-sm text-gray-600
@@ -180,7 +182,6 @@
 import { reportIssue } from 'src/errorHandling';
 import { fyo } from 'src/initFyo';
 import { languageDirectionKey, shortcutsKey } from 'src/utils/injectionKeys';
-import { openLink } from 'src/utils/ipcCalls';
 import { docsPathRef } from 'src/utils/refs';
 import { getSidebarConfig } from 'src/utils/sidebarConfig';
 import { SidebarConfig, SidebarItem, SidebarRoot } from 'src/utils/types';
@@ -194,6 +195,11 @@ import ShortcutsHelper from './ShortcutsHelper.vue';
 const COMPONENT_NAME = 'Sidebar';
 
 export default defineComponent({
+  components: {
+    Icon,
+    Modal,
+    ShortcutsHelper,
+  },
   emits: ['change-db-file'],
   setup() {
     return {
@@ -220,11 +226,6 @@ export default defineComponent({
     appVersion() {
       return fyo.store.appVersion;
     },
-  },
-  components: {
-    Icon,
-    Modal,
-    ShortcutsHelper,
   },
   async mounted() {
     const { companyName } = await fyo.doc.getDoc('AccountingSettings');
@@ -253,7 +254,7 @@ export default defineComponent({
     reportIssue,
     toggleSidebar,
     openDocumentation() {
-      openLink('https://docs.frappebooks.com/' + docsPathRef.value);
+      ipc.openLink('https://docs.frappebooks.com/' + docsPathRef.value);
     },
     setActiveGroup() {
       const { fullPath } = this.$router.currentRoute.value;

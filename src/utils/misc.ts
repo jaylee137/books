@@ -1,13 +1,17 @@
 import { Fyo } from 'fyo';
-import { ConfigFile, ConfigKeys } from 'fyo/core/types';
-import { Doc } from 'fyo/model/doc';
+import { ConfigFile } from 'fyo/core/types';
+import { translateSchema } from 'fyo/utils/translation';
+import { cloneDeep } from 'lodash';
 import { DateTime } from 'luxon';
 import { SetupWizard } from 'models/baseModels/SetupWizard/SetupWizard';
 import { ModelNameEnum } from 'models/types';
+import { reports } from 'reports/index';
 import SetupWizardSchema from 'schemas/app/SetupWizard.json';
 import { Schema } from 'schemas/types';
 import { fyo } from 'src/initFyo';
 import { QueryFilter } from 'utils/db/types';
+import { schemaTranslateables } from 'utils/translationHelpers';
+import type { LanguageMap } from 'utils/types';
 import { PeriodKey } from './types';
 
 export function getDatesAndPeriodList(period: PeriodKey): {
@@ -20,6 +24,8 @@ export function getDatesAndPeriodList(period: PeriodKey): {
 
   if (period === 'This Year') {
     fromDate = toDate.minus({ months: 12 });
+  } else if (period === 'YTD') {
+    fromDate = DateTime.now().startOf('year');
   } else if (period === 'This Quarter') {
     fromDate = toDate.minus({ months: 3 });
   } else if (period === 'This Month') {
@@ -35,6 +41,10 @@ export function getDatesAndPeriodList(period: PeriodKey): {
   while (true) {
     const nextDate = periodList.at(0)!.minus({ months: 1 });
     if (nextDate.toMillis() < fromDate.toMillis()) {
+      if (period === 'YTD') {
+        periodList.unshift(nextDate);
+        break;
+      }
       break;
     }
 
@@ -49,22 +59,26 @@ export function getDatesAndPeriodList(period: PeriodKey): {
   };
 }
 
-export function getSetupWizardDoc() {
+export function getSetupWizardDoc(languageMap?: LanguageMap) {
   /**
    * This is used cause when setup wizard is running
    * the database isn't yet initialized.
    */
+  const schema = cloneDeep(SetupWizardSchema);
+  if (languageMap) {
+    translateSchema(schema, languageMap, schemaTranslateables);
+  }
   return fyo.doc.getNewDoc(
     'SetupWizard',
     {},
     false,
-    SetupWizardSchema as Schema,
+    schema as Schema,
     SetupWizard
   );
 }
 
 export function updateConfigFiles(fyo: Fyo): ConfigFile {
-  const configFiles = fyo.config.get(ConfigKeys.Files, []) as ConfigFile[];
+  const configFiles = fyo.config.get('files', []) as ConfigFile[];
 
   const companyName = fyo.singles.AccountingSettings!.companyName as string;
   const id = fyo.singles.SystemSettings!.instanceId as string;
@@ -83,7 +97,7 @@ export function updateConfigFiles(fyo: Fyo): ConfigFile {
     newFile = configFiles[fileIndex];
   }
 
-  fyo.config.set(ConfigKeys.Files, configFiles);
+  fyo.config.set('files', configFiles);
   return newFile;
 }
 
@@ -166,4 +180,16 @@ export function getCreateFiltersFromListViewFilters(filters: QueryFilter) {
 
 export function getIsMac() {
   return navigator.userAgent.indexOf('Mac') !== -1;
+}
+
+export async function getReport(name: keyof typeof reports) {
+  const cachedReport = fyo.store.reports[name];
+  if (cachedReport) {
+    return cachedReport;
+  }
+
+  const report = new reports[name](fyo);
+  await report.initialize();
+  fyo.store.reports[name] = report;
+  return report;
 }

@@ -10,7 +10,7 @@ import { ValueError } from './errors';
 export type TranslationArgs = boolean | number | string;
 export type TranslationLiteral = TemplateStringsArray | TranslationArgs;
 
-class TranslationString {
+export class TranslationString {
   args: TranslationLiteral[];
   argList?: TranslationArgs[];
   strList?: string[];
@@ -31,7 +31,7 @@ class TranslationString {
   }
 
   #formatArg(arg: string | number | boolean) {
-    return arg ?? '';
+    return String(arg ?? '');
   }
 
   #translate() {
@@ -48,22 +48,23 @@ class TranslationString {
   }
 
   #stitch() {
-    if (!((this.args[0] as any) instanceof Array)) {
+    if (!((this.args[0] as unknown) instanceof Array)) {
       throw new ValueError(
-        `invalid args passed to TranslationString ${
+        `invalid args passed to TranslationString ${String(
           this.args
-        } of type ${typeof this.args[0]}`
+        )} of type ${typeof this.args[0]}`
       );
     }
 
-    this.strList = this.args[0] as any as string[];
+    this.strList = this.args[0] as unknown as string[];
     this.argList = this.args.slice(1) as TranslationArgs[];
 
     if (this.languageMap) {
       this.#translate();
     }
 
-    return this.strList!.map((s, i) => s + this.#formatArg(this.argList![i]))
+    return this.strList
+      .map((s, i) => s + this.#formatArg(this.argList![i]))
       .join('')
       .replace(/\s+/g, ' ')
       .trim();

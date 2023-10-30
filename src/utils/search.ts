@@ -24,7 +24,7 @@ interface SearchItem {
   label: string;
   group: Exclude<SearchGroup, 'Docs'>;
   route?: string;
-  action?: () => void;
+  action?: () => void | Promise<void>;
 }
 
 interface DocSearchItem extends Omit<SearchItem, 'group'> {
@@ -157,7 +157,8 @@ function getCreateList(fyo: Fyo): SearchItem[] {
 function getReportList(fyo: Fyo): SearchItem[] {
   const hasGstin = !!fyo.singles?.AccountingSettings?.gstin;
   const hasInventory = !!fyo.singles?.AccountingSettings?.enableInventory;
-  return Object.keys(reports)
+  const reportNames = Object.keys(reports) as (keyof typeof reports)[];
+  return reportNames
     .filter((r) => {
       const report = reports[r];
       if (report.isInventory && !hasInventory) {
@@ -194,8 +195,7 @@ function getListViewList(fyo: Fyo): SearchItem[] {
     ModelNameEnum.PrintTemplate,
   ];
 
-  const hasInventory = fyo.doc.singles.AccountingSettings?.enableInventory;
-  if (hasInventory) {
+  if (fyo.doc.singles.AccountingSecuttings?.enableInventory) {
     schemaNames.push(
       ModelNameEnum.StockMovement,
       ModelNameEnum.Shipment,
@@ -205,9 +205,20 @@ function getListViewList(fyo: Fyo): SearchItem[] {
     );
   }
 
-  const hasBatch = fyo.doc.singles.InventorySettings?.enableBatches;
-  if (hasBatch) {
+  if (fyo.doc.singles.AccountingSettings?.enablePriceList) {
+    schemaNames.push(ModelNameEnum.PriceList);
+  }
+
+  if (fyo.singles.InventorySettings?.enableBatches) {
     schemaNames.push(ModelNameEnum.Batch);
+  }
+
+  if (fyo.singles.InventorySettings?.enableSerialNumber) {
+    schemaNames.push(ModelNameEnum.SerialNumber);
+  }
+
+  if (fyo.doc.singles.AccountingSettings?.enableFormCustomization) {
+    schemaNames.push(ModelNameEnum.CustomForm);
   }
 
   if (fyo.store.isDevelopment) {
@@ -312,8 +323,8 @@ function getNonDocSearchList(fyo: Fyo) {
     .flat()
     .map((d) => {
       if (d.route && !d.action) {
-        d.action = () => {
-          routeTo(d.route!);
+        d.action = async () => {
+          await routeTo(d.route!);
         };
       }
       return d;
@@ -339,8 +350,8 @@ export class Search {
    * - Marked indices are rebuilt when the modal is opened.
    */
 
-  _obsSet: boolean = false;
-  numSearches: number = 0;
+  _obsSet = false;
+  numSearches = 0;
   searchables: Record<string, Searchable>;
   keywords: Record<string, Keyword[]>;
   priorityMap: Record<string, number> = {
@@ -496,9 +507,11 @@ export class Search {
     for (const si of this._intermediate.suggestions) {
       const label = si.label;
       const groupLabel =
-        (si as DocSearchItem).schemaLabel || this._groupLabelMap![si.group];
+        (si as DocSearchItem).schemaLabel || this._groupLabelMap?.[si.group];
       const more = (si as DocSearchItem).more ?? [];
-      const values = [label, more, groupLabel].flat();
+      const values = [label, more, groupLabel]
+        .flat()
+        .filter(Boolean) as string[];
 
       const { isMatch, distance } = this._getMatchAndDistance(input, values);
 
@@ -700,7 +713,7 @@ export class Search {
 
   _getDocSearchItemFromKeyword(keyword: Keyword): DocSearchItem {
     const schemaName = keyword.meta.schemaName as string;
-    const schemaLabel = this.fyo.schemaMap[schemaName]?.label!;
+    const schemaLabel = this.fyo.schemaMap[schemaName]?.label ?? schemaName;
     const route = this._getRouteFromKeyword(keyword);
     return {
       label: keyword.values[0],

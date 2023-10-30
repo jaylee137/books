@@ -20,12 +20,8 @@
       "section": "Default"
     },
     {
+      "abstract": true,
       "fieldname": "party",
-      "label": "Party",
-      "fieldtype": "Link",
-      "target": "Party",
-      "create": true,
-      "required": true,
       "section": "Default"
     },
     {
@@ -41,6 +37,13 @@
       "label": "Date",
       "fieldtype": "Date",
       "required": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "priceList",
+      "label": "Price List",
+      "fieldtype": "Link",
+      "target": "PriceList",
       "section": "Default"
     },
     {
@@ -148,6 +151,11 @@
       "tab": "Settings"
     },
     {
+      "abstract": true,
+      "fieldname": "makeAutoStockTransfer",
+      "tab": "Settings"
+    },
+    {
       "fieldname": "outstandingAmount",
       "label": "Outstanding Amount",
       "fieldtype": "Currency",
@@ -155,10 +163,8 @@
       "section": "Outstanding"
     },
     {
+      "abstract": true,
       "fieldname": "stockNotTransferred",
-      "label": "Stock Not Transferred",
-      "fieldtype": "Float",
-      "readOnly": true,
       "section": "Outstanding"
     },
     {
@@ -173,6 +179,11 @@
       "placeholder": "Add attachment",
       "label": "Attachment",
       "fieldtype": "Attachment",
+      "section": "References"
+    },
+    {
+      "abstract": true,
+      "fieldname": "backReference",
       "section": "References"
     }
   ],

@@ -5,8 +5,8 @@
       :class="values.length ? 'border-b' : ''"
     >
       <p
-        class="font-semibold text-base text-gray-900"
         v-if="schema?.naming !== 'random' && !schema?.isChild"
+        class="font-semibold text-base text-gray-900"
       >
         {{ name }}
       </p>
@@ -34,6 +34,11 @@ export default defineComponent({
   },
   data() {
     return { values: [] } as { values: { label: string; value: string }[] };
+  },
+  computed: {
+    schema() {
+      return this.fyo.schemaMap[this.schemaName];
+    },
   },
   watch: {
     async name(v1, v2) {
@@ -69,6 +74,10 @@ export default defineComponent({
         })
       )[0];
 
+      if (!data) {
+        return;
+      }
+
       this.values = fields
         .map((f) => {
           const value = data[f.fieldname];
@@ -82,11 +91,6 @@ export default defineComponent({
           };
         })
         .filter((i) => !!i.value);
-    },
-  },
-  computed: {
-    schema() {
-      return this.fyo.schemaMap[this.schemaName];
     },
   },
 });

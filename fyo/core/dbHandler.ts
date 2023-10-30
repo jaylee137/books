@@ -7,10 +7,15 @@ import { translateSchema } from 'fyo/utils/translation';
 import { Field, RawValue, SchemaMap } from 'schemas/types';
 import { getMapFromList } from 'utils';
 import {
+  Cashflow,
   DatabaseBase,
   DatabaseDemuxBase,
   GetAllOptions,
+  IncomeExpense,
   QueryFilter,
+  TopExpenses,
+  TotalCreditAndDebit,
+  TotalOutstanding,
 } from 'utils/db/types';
 import { schemaTranslateables } from 'utils/translationHelpers';
 import { LanguageMap } from 'utils/types';
@@ -21,21 +26,12 @@ import {
   DocValueMap,
   RawValueMap,
 } from './types';
+import { ReturnDocItem } from 'models/inventory/types';
 
-// Return types of Bespoke Queries
-type TopExpenses = { account: string; total: number }[];
-type TotalOutstanding = { total: number; outstanding: number };
-type Cashflow = { inflow: number; outflow: number; yearmonth: string }[];
-type Balance = { balance: number; yearmonth: string }[];
-type IncomeExpense = { income: Balance; expense: Balance };
-type TotalCreditAndDebit = {
-  account: string;
-  totalCredit: number;
-  totalDebit: number;
-};
 type FieldMap = Record<string, Record<string, Field>>;
 
 export class DatabaseHandler extends DatabaseBase {
+  /* eslint-disable @typescript-eslint/no-floating-promises */
   #fyo: Fyo;
   converter: Converter;
   #demux: DatabaseDemuxBase;
@@ -83,7 +79,7 @@ export class DatabaseHandler extends DatabaseBase {
   }
 
   async init() {
-    this.#schemaMap = (await this.#demux.getSchemaMap()) as SchemaMap;
+    this.#schemaMap = await this.#demux.getSchemaMap();
     this.#setFieldMap();
     this.observer = new Observable();
   }
@@ -92,7 +88,7 @@ export class DatabaseHandler extends DatabaseBase {
     if (languageMap) {
       translateSchema(this.#schemaMap, languageMap, schemaTranslateables);
     } else {
-      this.#schemaMap = (await this.#demux.getSchemaMap()) as SchemaMap;
+      this.#schemaMap = await this.#demux.getSchemaMap();
       this.#setFieldMap();
     }
   }
@@ -142,6 +138,7 @@ export class DatabaseHandler extends DatabaseBase {
     options: GetAllOptions = {}
   ): Promise<DocValueMap[]> {
     const rawValueMap = await this.#getAll(schemaName, options);
+
     this.observer.trigger(`getAll:${schemaName}`, options);
     return this.converter.toDocValueMap(
       schemaName,
@@ -154,6 +151,7 @@ export class DatabaseHandler extends DatabaseBase {
     options: GetAllOptions = {}
   ): Promise<RawValueMap[]> {
     const all = await this.#getAll(schemaName, options);
+
     this.observer.trigger(`getAllRaw:${schemaName}`, options);
     return all;
   }
@@ -188,6 +186,7 @@ export class DatabaseHandler extends DatabaseBase {
   ): Promise<number> {
     const rawValueMap = await this.#getAll(schemaName, options);
     const count = rawValueMap.length;
+
     this.observer.trigger(`count:${schemaName}`, options);
     return count;
   }
@@ -199,18 +198,21 @@ export class DatabaseHandler extends DatabaseBase {
     newName: string
   ): Promise<void> {
     await this.#demux.call('rename', schemaName, oldName, newName);
+
     this.observer.trigger(`rename:${schemaName}`, { oldName, newName });
   }
 
   async update(schemaName: string, docValueMap: DocValueMap): Promise<void> {
     const rawValueMap = this.converter.toRawValueMap(schemaName, docValueMap);
     await this.#demux.call('update', schemaName, rawValueMap);
+
     this.observer.trigger(`update:${schemaName}`, docValueMap);
   }
 
   // Delete
   async delete(schemaName: string, name: string): Promise<void> {
     await this.#demux.call('delete', schemaName, name);
+
     this.observer.trigger(`delete:${schemaName}`, name);
   }
 
@@ -220,6 +222,7 @@ export class DatabaseHandler extends DatabaseBase {
       schemaName,
       filters
     )) as number;
+
     this.observer.trigger(`deleteAll:${schemaName}`, filters);
     return count;
   }
@@ -231,6 +234,7 @@ export class DatabaseHandler extends DatabaseBase {
       schemaName,
       name
     )) as boolean;
+
     this.observer.trigger(`exists:${schemaName}`, name);
     return doesExist;
   }
@@ -302,7 +306,7 @@ export class DatabaseHandler extends DatabaseBase {
     )) as IncomeExpense;
   }
 
-  async getTotalCreditAndDebit(): Promise<unknown> {
+  async getTotalCreditAndDebit(): Promise<TotalCreditAndDebit[]> {
     return (await this.#demux.callBespoke(
       'getTotalCreditAndDebit'
     )) as TotalCreditAndDebit[];
@@ -325,6 +329,17 @@ export class DatabaseHandler extends DatabaseBase {
       batch,
       serialNumbers
     )) as number | null;
+  }
+
+  async getReturnBalanceItemsQty(
+    schemaName: string,
+    docName: string
+  ): Promise<Record<string, ReturnDocItem> | undefined> {
+    return (await this.#demux.callBespoke(
+      'getReturnBalanceItemsQty',
+      schemaName,
+      docName
+    )) as Promise<Record<string, ReturnDocItem> | undefined>;
   }
 
   /**

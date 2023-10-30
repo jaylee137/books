@@ -1,4 +1,3 @@
-import { t } from 'fyo';
 import { DocValue } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
 import {
@@ -39,6 +38,10 @@ export class StockTransferItem extends TransferItem {
     return this.schemaName === ModelNameEnum.ShipmentItem;
   }
 
+  get isReturn(): boolean {
+    return !!this.parentdoc?.isReturn;
+  }
+
   formulas: FormulaMap = {
     description: {
       formula: async () =>
@@ -73,7 +76,7 @@ export class StockTransferItem extends TransferItem {
       dependsOn: ['item', 'unit'],
     },
     transferQuantity: {
-      formula: async (fieldname) => {
+      formula: (fieldname) => {
         if (fieldname === 'quantity' || this.unit === this.transferUnit) {
           return this.quantity;
         }
@@ -90,11 +93,20 @@ export class StockTransferItem extends TransferItem {
 
         const itemDoc = await this.fyo.doc.getDoc(
           ModelNameEnum.Item,
-          this.item as string
+          this.item
         );
         const unitDoc = itemDoc.getLink('uom');
 
         let quantity: number = this.quantity ?? 1;
+
+        if (this.isReturn && quantity > 0) {
+          quantity *= -1;
+        }
+
+        if (!this.isReturn && quantity < 0) {
+          quantity *= -1;
+        }
+
         if (fieldname === 'transferQuantity') {
           quantity = this.transferQuantity! * this.unitConversionFactor!;
         }
@@ -110,6 +122,7 @@ export class StockTransferItem extends TransferItem {
         'transferQuantity',
         'transferUnit',
         'unitConversionFactor',
+        'isReturn',
       ],
     },
     unitConversionFactor: {
@@ -146,7 +159,7 @@ export class StockTransferItem extends TransferItem {
       dependsOn: ['rate', 'quantity'],
     },
     rate: {
-      formula: async (fieldname) => {
+      formula: async () => {
         const rate = (await this.fyo.getValue(
           'Item',
           this.item as string,
@@ -177,8 +190,8 @@ export class StockTransferItem extends TransferItem {
           return;
         }
 
-        const defaultLocation = this.fyo.singles.InventorySettings
-          ?.defaultLocation as string | undefined;
+        const defaultLocation =
+          this.fyo.singles.InventorySettings?.defaultLocation;
 
         if (defaultLocation && !this.location) {
           return defaultLocation;
@@ -195,13 +208,14 @@ export class StockTransferItem extends TransferItem {
 
       const item = await this.fyo.db.getAll(ModelNameEnum.UOMConversionItem, {
         fields: ['parent'],
-        filters: { uom: value as string, parent: this.item! },
+        filters: { uom: value as string, parent: this.item },
       });
 
       if (item.length < 1)
         throw new ValidationError(
-          t`Transfer Unit ${value as string} is not applicable for Item ${this
-            .item!}`
+          this.fyo.t`Transfer Unit ${
+            value as string
+          } is not applicable for Item ${this.item}`
         );
     },
   };

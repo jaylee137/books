@@ -3,14 +3,22 @@
     <PageHeader :title="title">
       <DropdownWithActions
         v-for="group of groupedActions"
-        :icon="false"
         :key="group.label"
+        :icon="false"
         :type="group.type"
         :actions="group.actions"
         class="text-xs"
       >
         {{ group.group }}
       </DropdownWithActions>
+      <Button
+        ref="printButton"
+        :icon="true"
+        :title="t`Open Report Print View`"
+        @click="routeTo(`/report-print/${reportClassName}`)"
+      >
+        <feather-icon name="printer" class="w-4 h-4"></feather-icon>
+      </Button>
     </PageHeader>
 
     <!-- Filters -->
@@ -20,15 +28,15 @@
     >
       <FormControl
         v-for="field in report.filters"
+        :key="field.fieldname + '-filter'"
         :border="true"
         size="small"
         :class="[field.fieldtype === 'Check' ? 'self-end' : '']"
         :show-label="true"
-        :key="field.fieldname + '-filter'"
         :df="field"
         :value="report.get(field.fieldname)"
         :read-only="loading"
-        @change="async (value) => await report.set(field.fieldname, value)"
+        @change="async (value) => await report?.set(field.fieldname, value)"
       />
     </div>
 
@@ -36,59 +44,55 @@
     <ListReport v-if="report" :report="report" class="" />
   </div>
 </template>
-<script>
-import { computed } from '@vue/reactivity';
+<script lang="ts">
 import { t } from 'fyo';
+import { DocValue } from 'fyo/core/types';
 import { reports } from 'reports';
+import { Report } from 'reports/Report';
+import Button from 'src/components/Button.vue';
 import FormControl from 'src/components/Controls/FormControl.vue';
 import DropdownWithActions from 'src/components/DropdownWithActions.vue';
 import PageHeader from 'src/components/PageHeader.vue';
 import ListReport from 'src/components/Report/ListReport.vue';
 import { fyo } from 'src/initFyo';
-import { docsPathMap } from 'src/utils/misc';
+import { shortcutsKey } from 'src/utils/injectionKeys';
+import { docsPathMap, getReport } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
-import { defineComponent } from 'vue';
+import { ActionGroup } from 'src/utils/types';
+import { routeTo } from 'src/utils/ui';
+import { PropType, computed, defineComponent, inject } from 'vue';
 
 export default defineComponent({
-  props: {
-    reportClassName: String,
-    defaultFilters: {
-      type: String,
-      default: '{}',
-    },
-  },
-  data() {
-    return {
-      loading: false,
-      report: null,
-    };
+  components: {
+    PageHeader,
+    FormControl,
+    ListReport,
+    DropdownWithActions,
+    Button,
   },
   provide() {
     return {
       report: computed(() => this.report),
     };
   },
-  components: { PageHeader, FormControl, ListReport, DropdownWithActions },
-  async activated() {
-    docsPathRef.value = docsPathMap[this.reportClassName] ?? docsPathMap.Reports;
-    await this.setReportData();
-
-    const filters = JSON.parse(this.defaultFilters);
-    const filterKeys = Object.keys(filters);
-    for (const key of filterKeys) {
-      await this.report.set(key, filters[key]);
-    }
-
-    if (filterKeys.length) {
-      await this.report.updateData();
-    }
-
-    if (fyo.store.isDevelopment) {
-      window.rep = this;
-    }
+  props: {
+    reportClassName: {
+      type: String as PropType<keyof typeof reports>,
+      required: true,
+    },
+    defaultFilters: {
+      type: String,
+      default: '{}',
+    },
   },
-  deactivated() {
-    docsPathRef.value = '';
+  setup() {
+    return { shortcuts: inject(shortcutsKey) };
+  },
+  data() {
+    return {
+      loading: false,
+      report: null as null | Report,
+    };
   },
   computed: {
     title() {
@@ -104,24 +108,51 @@ export default defineComponent({
         acc[ac.group] ??= {
           group: ac.group,
           label: ac.label ?? '',
-          e: ac.type,
+          type: ac.type ?? 'secondary',
           actions: [],
         };
 
         acc[ac.group].actions.push(ac);
         return acc;
-      }, {});
+      }, {} as Record<string, ActionGroup>);
 
       return Object.values(actionsMap);
     },
   },
-  methods: {
-    async setReportData() {
-      const Report = reports[this.reportClassName];
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  async activated() {
+    docsPathRef.value =
+      docsPathMap[this.reportClassName] ?? docsPathMap.Reports!;
+    await this.setReportData();
 
+    const filters = JSON.parse(this.defaultFilters) as Record<string, DocValue>;
+    const filterKeys = Object.keys(filters);
+    for (const key of filterKeys) {
+      await this.report?.set(key, filters[key]);
+    }
+
+    if (filterKeys.length) {
+      await this.report?.updateData();
+    }
+
+    if (fyo.store.isDevelopment) {
+      // @ts-ignore
+      window.rep = this;
+    }
+
+    this.shortcuts?.pmod.set(this.reportClassName, ['KeyP'], async () => {
+      await routeTo(`/report-print/${this.reportClassName}`);
+    });
+  },
+  deactivated() {
+    docsPathRef.value = '';
+    this.shortcuts?.delete(this.reportClassName);
+  },
+  methods: {
+    routeTo,
+    async setReportData() {
       if (this.report === null) {
-        this.report = new Report(fyo);
-        await this.report.initialize();
+        this.report = await getReport(this.reportClassName);
       }
 
       if (!this.report.reportData.length) {

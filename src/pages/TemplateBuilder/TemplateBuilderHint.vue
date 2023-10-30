@@ -21,8 +21,8 @@
           v-else-if="Array.isArray(r.value)"
           class="
             text-blue-600
-            bg-blue-50
-            border-blue-200 border
+            bg-blue-100
+            border-white border
             tracking-tighter
             rounded
             text-xs
@@ -35,8 +35,8 @@
           v-else
           class="
             text-pink-600
-            bg-pink-50
-            border-pink-200 border
+            bg-pink-100
+            border-white border
             tracking-tighter
             rounded
             text-xs
@@ -63,10 +63,12 @@
   </div>
 </template>
 <script lang="ts">
+import { PrintTemplateHint } from 'src/utils/printTemplates';
+import { PropType } from 'vue';
 import { defineComponent } from 'vue';
 type HintRow = {
   key: string;
-  value: string | Record<string, unknown>;
+  value: PrintTemplateHint[string];
   isCollapsible: boolean;
   collapsed: boolean;
 };
@@ -74,7 +76,10 @@ export default defineComponent({
   name: 'TemplateBuilderHint',
   props: {
     prefix: { type: String, default: '' },
-    hints: { type: Object, required: true },
+    hints: {
+      type: Object as PropType<PrintTemplateHint>,
+      required: true,
+    },
     level: { type: Number, default: 0 },
   },
   data() {

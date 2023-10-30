@@ -14,7 +14,7 @@ export abstract class LedgerReport extends Report {
   static reportName = 'general-ledger';
 
   _rawData: LedgerEntry[] = [];
-  shouldRefresh: boolean = false;
+  shouldRefresh = false;
 
   constructor(fyo: Fyo) {
     super(fyo);
@@ -105,8 +105,8 @@ export abstract class LedgerReport extends Report {
         name: safeParseInt(entry.name),
         account: entry.account,
         date: new Date(entry.date),
-        debit: safeParseFloat(entry.debit),
-        credit: safeParseFloat(entry.credit),
+        debit: Math.abs(safeParseFloat(entry.debit)),
+        credit: Math.abs(safeParseFloat(entry.credit)),
         balance: 0,
         referenceType: entry.referenceType,
         referenceName: entry.referenceName,
@@ -117,7 +117,7 @@ export abstract class LedgerReport extends Report {
     });
   }
 
-  abstract _getQueryFilters(): Promise<QueryFilter>;
+  abstract _getQueryFilters(): QueryFilter | Promise<QueryFilter>;
 
   getActions(): Action[] {
     return getCommonExportActions(this);

@@ -1,35 +1,27 @@
 <template>
   <div>
     <!-- Search Bar Button -->
-    <Button @click="open" class="px-2" :padding="false">
-      <feather-icon name="search" class="w-4 h-4 me-1 text-gray-800" />
-      <p>{{ t`Search` }}</p>
-      <div class="text-gray-500 px-1 ms-4 text-sm whitespace-nowrap">
-        {{ modKeyText('k') }}
-      </div>
+    <Button class="px-3 py-2 rounded-r-none" :padding="false" @click="open">
+      <feather-icon name="search" class="w-4 h-4 text-gray-700" />
     </Button>
   </div>
 
   <!-- Search Modal -->
   <Modal
     :open-modal="openModal"
-    @closemodal="close"
     :set-close-listener="false"
+    @closemodal="close"
   >
     <div class="w-form">
       <!-- Search Input -->
       <div class="p-1">
         <input
           ref="input"
+          v-model="inputValue"
           type="search"
           autocomplete="off"
           spellcheck="false"
           :placeholder="t`Type to search...`"
-          v-model="inputValue"
-          @keydown.up="up"
-          @keydown.down="down"
-          @keydown.enter="() => select()"
-          @keydown.esc="close"
           class="
             bg-gray-100
             text-2xl
@@ -40,18 +32,25 @@
             rounded-md
             p-3
           "
+          @keydown.up="up"
+          @keydown.down="down"
+          @keydown.enter="() => select()"
+          @keydown.esc="close"
         />
       </div>
       <hr v-if="suggestions.length" />
 
       <!-- Search List -->
-      <div :style="`max-height: ${49 * 6 - 1}px`" class="overflow-auto">
+      <div
+        :style="`max-height: ${49 * 6 - 1}px`"
+        class="overflow-auto custom-scroll"
+      >
         <div
           v-for="(si, i) in suggestions"
           :key="`${i}-${si.label}`"
           :data-index="`search-suggestion-${i}`"
           class="hover:bg-gray-50 cursor-pointer"
-          :class="idx === i ? 'border-blue-500 bg-gray-50 border-s-4' : ''"
+          :class="idx === i ? 'border-gray-700 bg-gray-50 border-s-4' : ''"
           @click="select(i)"
         >
           <!-- Search List Item -->
@@ -61,12 +60,12 @@
           >
             <div class="flex items-center">
               <p
-                :class="idx === i ? 'text-blue-600' : 'text-gray-900'"
+                :class="idx === i ? 'text-gray-900' : 'text-gray-700'"
                 :style="idx === i ? 'margin-left: -4px' : ''"
               >
                 {{ si.label }}
               </p>
-              <p class="text-gray-600 text-sm ms-3" v-if="si.group === 'Docs'">
+              <p v-if="si.group === 'Docs'" class="text-gray-600 text-sm ms-3">
                 {{ si.more.filter(Boolean).join(', ') }}
               </p>
             </div>
@@ -173,8 +172,8 @@
           </p>
 
           <div
-            class="border border-gray-100 rounded flex justify-self-end ms-2"
             v-if="(searcher?.numSearches ?? 0) > 50"
+            class="border border-gray-100 rounded flex justify-self-end ms-2"
           >
             <template
               v-for="c in allowedLimits.filter(
@@ -183,9 +182,9 @@
               :key="c + '-count'"
             >
               <button
-                @click="limit = Number(c)"
                 class="w-9"
                 :class="limit === c ? 'bg-gray-100' : ''"
+                @click="limit = Number(c)"
               >
                 {{ c === -1 ? t`All` : c }}
               </button>
@@ -201,13 +200,12 @@
 import { fyo } from 'src/initFyo';
 import { getBgTextColorClass } from 'src/utils/colors';
 import { searcherKey, shortcutsKey } from 'src/utils/injectionKeys';
-import { openLink } from 'src/utils/ipcCalls';
 import { docsPathMap } from 'src/utils/misc';
 import {
-  getGroupLabelMap,
   SearchGroup,
-  searchGroups,
   SearchItems,
+  getGroupLabelMap,
+  searchGroups,
 } from 'src/utils/search';
 import { defineComponent, inject, nextTick } from 'vue';
 import Button from './Button.vue';
@@ -218,6 +216,7 @@ const COMPONENT_NAME = 'SearchBar';
 type SchemaFilters = { value: string; label: string; index: number }[];
 
 export default defineComponent({
+  components: { Modal, Button },
   setup() {
     return {
       searcher: inject(searcherKey),
@@ -234,121 +233,6 @@ export default defineComponent({
       limit: 50,
       allowedLimits: [50, 100, 500, -1],
     };
-  },
-  components: { Modal, Button },
-  async mounted() {
-    if (fyo.store.isDevelopment) {
-      // @ts-ignore
-      window.search = this;
-    }
-
-    this.openModal = false;
-  },
-  activated() {
-    this.setShortcuts();
-    this.openModal = false;
-  },
-  deactivated() {
-    this.shortcuts?.delete(COMPONENT_NAME);
-  },
-  methods: {
-    openDocs() {
-      openLink('https://docs.frappebooks.com/' + docsPathMap.Search);
-    },
-    getShortcuts() {
-      const ifOpen = (cb: Function) => () => this.openModal && cb();
-      const ifClose = (cb: Function) => () => !this.openModal && cb();
-
-      const shortcuts = [
-        {
-          shortcut: 'KeyK',
-          callback: ifClose(() => this.open()),
-        },
-      ];
-
-      for (const i in searchGroups) {
-        shortcuts.push({
-          shortcut: `Digit${Number(i) + 1}`,
-          callback: ifOpen(() => {
-            const group = searchGroups[i];
-            if (!this.searcher) {
-              return;
-            }
-
-            const value = this.searcher.filters.groupFilters[group];
-            if (typeof value !== 'boolean') {
-              return;
-            }
-
-            this.searcher!.set(group, !value);
-          }),
-        });
-      }
-
-      return shortcuts;
-    },
-    setShortcuts() {
-      for (const { shortcut, callback } of this.getShortcuts()) {
-        this.shortcuts!.pmod.set(COMPONENT_NAME, [shortcut], callback);
-      }
-    },
-    modKeyText(key: string): string {
-      key = key.toUpperCase();
-      if (this.platform === 'Mac') {
-        return `⌘ ${key}`;
-      }
-
-      return `Ctrl ${key}`;
-    },
-    open(): void {
-      this.openModal = true;
-      this.searcher?.updateKeywords();
-
-      nextTick(() => {
-        (this.$refs.input as HTMLInputElement)?.focus();
-      });
-    },
-    close(): void {
-      this.openModal = false;
-      this.reset();
-    },
-    reset(): void {
-      this.inputValue = '';
-    },
-    up(): void {
-      this.idx = Math.max(this.idx - 1, 0);
-      this.scrollToHighlighted();
-    },
-    down(): void {
-      this.idx = Math.max(
-        Math.min(this.idx + 1, this.suggestions.length - 1),
-        0
-      );
-      this.scrollToHighlighted();
-    },
-    select(idx?: number): void {
-      this.idx = idx ?? this.idx;
-      this.suggestions[this.idx]?.action?.();
-      this.close();
-    },
-    scrollToHighlighted(): void {
-      const query = `[data-index="search-suggestion-${this.idx}"]`;
-      const element = document.querySelectorAll(query)?.[0];
-      element?.scrollIntoView({ block: 'nearest' });
-    },
-    getGroupFilterButtonClass(g: SearchGroup): string {
-      if (!this.searcher) {
-        return '';
-      }
-
-      const isOn = this.searcher.filters.groupFilters[g];
-      const color = this.groupColorMap[g];
-      if (isOn) {
-        return `${getBgTextColorClass(color)} border-${color}-100`;
-      }
-
-      return `text-${color}-600 border-${color}-100`;
-    },
   },
   computed: {
     groupLabelMap(): Record<SearchGroup, string> {
@@ -404,6 +288,112 @@ export default defineComponent({
       }
 
       return suggestions.slice(0, this.limit);
+    },
+  },
+  async mounted() {
+    if (fyo.store.isDevelopment) {
+      // @ts-ignore
+      window.search = this;
+    }
+
+    this.openModal = false;
+  },
+  activated() {
+    this.setShortcuts();
+    this.openModal = false;
+  },
+  deactivated() {
+    this.shortcuts?.delete(COMPONENT_NAME);
+  },
+  methods: {
+    openDocs() {
+      ipc.openLink('https://docs.frappebooks.com/' + docsPathMap.Search);
+    },
+    getShortcuts() {
+      const ifOpen = (cb: Function) => () => this.openModal && cb();
+      const ifClose = (cb: Function) => () => !this.openModal && cb();
+
+      const shortcuts = [
+        {
+          shortcut: 'KeyK',
+          callback: ifClose(() => this.open()),
+        },
+      ];
+
+      for (const i in searchGroups) {
+        shortcuts.push({
+          shortcut: `Digit${Number(i) + 1}`,
+          callback: ifOpen(() => {
+            const group = searchGroups[i];
+            if (!this.searcher) {
+              return;
+            }
+
+            const value = this.searcher.filters.groupFilters[group];
+            if (typeof value !== 'boolean') {
+              return;
+            }
+
+            this.searcher.set(group, !value);
+          }),
+        });
+      }
+
+      return shortcuts;
+    },
+    setShortcuts() {
+      for (const { shortcut, callback } of this.getShortcuts()) {
+        this.shortcuts!.pmod.set(COMPONENT_NAME, [shortcut], callback);
+      }
+    },
+    open(): void {
+      this.openModal = true;
+      this.searcher?.updateKeywords();
+
+      nextTick(() => {
+        (this.$refs.input as HTMLInputElement)?.focus();
+      });
+    },
+    close(): void {
+      this.openModal = false;
+      this.reset();
+    },
+    reset(): void {
+      this.inputValue = '';
+    },
+    up(): void {
+      this.idx = Math.max(this.idx - 1, 0);
+      this.scrollToHighlighted();
+    },
+    down(): void {
+      this.idx = Math.max(
+        Math.min(this.idx + 1, this.suggestions.length - 1),
+        0
+      );
+      this.scrollToHighlighted();
+    },
+    select(idx?: number): void {
+      this.idx = idx ?? this.idx;
+      this.suggestions[this.idx]?.action?.();
+      this.close();
+    },
+    scrollToHighlighted(): void {
+      const query = `[data-index="search-suggestion-${this.idx}"]`;
+      const element = document.querySelectorAll(query)?.[0];
+      element?.scrollIntoView({ block: 'nearest' });
+    },
+    getGroupFilterButtonClass(g: SearchGroup): string {
+      if (!this.searcher) {
+        return '';
+      }
+
+      const isOn = this.searcher.filters.groupFilters[g];
+      const color = this.groupColorMap[g];
+      if (isOn) {
+        return `${getBgTextColorClass(color)} border-${color}-100`;
+      }
+
+      return `text-${color}-600 border-${color}-100`;
     },
   },
 });

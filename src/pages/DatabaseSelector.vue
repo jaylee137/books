@@ -17,7 +17,7 @@
         </h1>
         <p class="text-gray-600 text-base select-none">
           {{
-            t`Create a new file or select an existing one from your computer`
+            t`Create a new company or select an existing one from your computer`
           }}
         </p>
       </div>
@@ -26,9 +26,10 @@
 
       <!-- New File (Blue Icon) -->
       <div
-        @click="newDatabase"
+        data-testid="create-new-file"
         class="px-4 h-row-largest flex flex-row items-center gap-4 p-2"
         :class="creatingDemo ? '' : 'hover:bg-gray-50 cursor-pointer'"
+        @click="newDatabase"
       >
         <div class="w-8 h-8 rounded-full bg-blue-500 relative flex-center">
           <feather-icon name="plus" class="text-white w-5 h-5" />
@@ -36,29 +37,49 @@
 
         <div>
           <p class="font-medium">
-            {{ t`New File` }}
+            {{ t`New Company` }}
           </p>
           <p class="text-sm text-gray-600">
-            {{ t`Create a new file and store it in your computer.` }}
+            {{ t`Create a new company and store it on your computer` }}
           </p>
         </div>
       </div>
 
       <!-- Existing File (Green Icon) -->
       <div
-        @click="existingDatabase"
         class="px-4 h-row-largest flex flex-row items-center gap-4 p-2"
         :class="creatingDemo ? '' : 'hover:bg-gray-50 cursor-pointer'"
+        @click="existingDatabase"
       >
         <div class="w-8 h-8 rounded-full bg-green-500 relative flex-center">
           <feather-icon name="upload" class="w-4 h-4 text-white" />
         </div>
         <div>
           <p class="font-medium">
-            {{ t`Existing File` }}
+            {{ t`Existing Company` }}
           </p>
           <p class="text-sm text-gray-600">
-            {{ t`Load an existing .db file from your computer.` }}
+            {{ t`Load an existing company from your computer` }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Create Demo (Pink Icon) -->
+      <div
+        v-if="!files?.length"
+        class="px-4 h-row-largest flex flex-row items-center gap-4 p-2"
+        :class="creatingDemo ? '' : 'hover:bg-gray-50 cursor-pointer'"
+        @click="createDemo"
+      >
+        <div class="w-8 h-8 rounded-full bg-pink-500 relative flex-center">
+          <feather-icon name="monitor" class="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <p class="font-medium">
+            {{ t`Create Demo` }}
+          </p>
+          <p class="text-sm text-gray-600">
+            {{ t`Create a demo company to try out Frappe Books` }}
           </p>
         </div>
       </div>
@@ -67,12 +88,12 @@
       <!-- File List -->
       <div class="overflow-y-auto" style="max-height: 340px">
         <div
-          class="h-row-largest px-4 flex gap-4 items-center"
-          :class="creatingDemo ? '' : 'hover:bg-gray-50 cursor-pointer'"
           v-for="(file, i) in files"
           :key="file.dbPath"
-          @click="selectFile(file)"
+          class="h-row-largest px-4 flex gap-4 items-center"
+          :class="creatingDemo ? '' : 'hover:bg-gray-50 cursor-pointer'"
           :title="t`${file.companyName} stored at ${file.dbPath}`"
+          @click="selectFile(file)"
         >
           <div
             class="
@@ -145,6 +166,7 @@
       >
         <LanguageSelector v-show="!creatingDemo" class="text-sm w-28" />
         <button
+          v-if="files?.length"
           class="
             text-sm
             bg-gray-100
@@ -154,9 +176,12 @@
             py-1.5
             w-28
             h-8
+            no-scrollbar
+            overflow-x-auto
+            whitespace-nowrap
           "
-          @click="createDemo"
           :disabled="creatingDemo"
+          @click="createDemo"
         >
           {{ creatingDemo ? t`Please Wait` : t`Create Demo` }}
         </button>
@@ -182,9 +207,9 @@
         <div class="flex my-12 justify-center items-baseline gap-4 text-base">
           <label for="basecount" class="text-gray-600">Base Count</label>
           <input
+            v-model="baseCount"
             type="number"
             name="basecount"
-            v-model="baseCount"
             class="
               bg-gray-100
               focus:bg-gray-200
@@ -198,13 +223,13 @@
         <div class="flex justify-between">
           <Button @click="openModal = false">Cancel</Button>
           <Button
+            type="primary"
             @click="
               () => {
                 openModal = false;
                 startDummyInstanceSetup();
               }
             "
-            type="primary"
             >Create</Button
           >
         </div>
@@ -214,8 +239,8 @@
 </template>
 <script lang="ts">
 import { setupDummyInstance } from 'dummy';
-import { ipcRenderer } from 'electron';
 import { t } from 'fyo';
+import { Verb } from 'fyo/telemetry/types';
 import { DateTime } from 'luxon';
 import Button from 'src/components/Button.vue';
 import LanguageSelector from 'src/components/Controls/LanguageSelector.vue';
@@ -224,15 +249,21 @@ import Loading from 'src/components/Loading.vue';
 import Modal from 'src/components/Modal.vue';
 import { fyo } from 'src/initFyo';
 import { showDialog } from 'src/utils/interactive';
-import { deleteDb, getSavePath } from 'src/utils/ipcCalls';
 import { updateConfigFiles } from 'src/utils/misc';
-import { IPC_ACTIONS } from 'utils/messages';
+import { deleteDb, getSavePath, getSelectedFilePath } from 'src/utils/ui';
 import type { ConfigFilesWithModified } from 'utils/types';
 import { defineComponent } from 'vue';
 
 export default defineComponent({
   name: 'DatabaseSelector',
-  emits: ['file-selected'],
+  components: {
+    LanguageSelector,
+    Loading,
+    FeatherIcon,
+    Modal,
+    Button,
+  },
+  emits: ['file-selected', 'new-database'],
   data() {
     return {
       openModal: false,
@@ -273,7 +304,7 @@ export default defineComponent({
     },
     async deleteDb(i: number) {
       const file = this.files[i];
-      const vm = this;
+      const setFiles = this.setFiles.bind(this);
 
       await showDialog({
         title: t`Delete ${file.companyName}?`,
@@ -284,13 +315,15 @@ export default defineComponent({
             label: this.t`Yes`,
             async action() {
               await deleteDb(file.dbPath);
-              await vm.setFiles();
+              await setFiles();
             },
             isPrimary: true,
           },
           {
             label: this.t`No`,
-            action() {},
+            action() {
+              return null;
+            },
             isEscape: true,
           },
         ],
@@ -298,7 +331,7 @@ export default defineComponent({
     },
     async createDemo() {
       if (!fyo.store.isDevelopment) {
-        this.startDummyInstanceSetup();
+        await this.startDummyInstanceSetup();
       } else {
         this.openModal = true;
       }
@@ -324,70 +357,45 @@ export default defineComponent({
       updateConfigFiles(fyo);
       await fyo.purgeCache();
       await this.setFiles();
-
+      this.fyo.telemetry.log(Verb.Created, 'dummy-instance');
       this.creatingDemo = false;
+      this.$emit('file-selected', filePath);
     },
     async setFiles() {
-      const dbList: ConfigFilesWithModified[] = await ipcRenderer.invoke(
-        IPC_ACTIONS.GET_DB_LIST
-      );
-
+      const dbList = await ipc.getDbList();
       this.files = dbList?.sort(
         (a, b) => Date.parse(b.modified) - Date.parse(a.modified)
       );
     },
-    async newDatabase() {
+    newDatabase() {
       if (this.creatingDemo) {
         return;
       }
 
-      const { filePath, canceled } = await getSavePath('books', 'db');
-      if (canceled || !filePath) {
-        return;
-      }
-
-      this.emitFileSelected(filePath, true);
+      this.$emit('new-database');
     },
     async existingDatabase() {
       if (this.creatingDemo) {
         return;
       }
 
-      const filePath = (
-        await ipcRenderer.invoke(IPC_ACTIONS.GET_OPEN_FILEPATH, {
-          title: this.t`Select file`,
-          properties: ['openFile'],
-          filters: [{ name: 'SQLite DB File', extensions: ['db'] }],
-        })
-      )?.filePaths?.[0];
+      const filePath = (await getSelectedFilePath())?.filePaths?.[0];
       this.emitFileSelected(filePath);
     },
-    async selectFile(file: ConfigFilesWithModified) {
+    selectFile(file: ConfigFilesWithModified) {
       if (this.creatingDemo) {
         return;
       }
 
-      await this.emitFileSelected(file.dbPath);
+      this.emitFileSelected(file.dbPath);
     },
-    async emitFileSelected(filePath: string, isNew?: boolean) {
+    emitFileSelected(filePath: string) {
       if (!filePath) {
         return;
       }
 
-      if (isNew) {
-        this.$emit('file-selected', filePath, isNew);
-        return;
-      }
-
-      this.$emit('file-selected', filePath, !!isNew);
+      this.$emit('file-selected', filePath);
     },
-  },
-  components: {
-    LanguageSelector,
-    Loading,
-    FeatherIcon,
-    Modal,
-    Button,
   },
 });
 </script>

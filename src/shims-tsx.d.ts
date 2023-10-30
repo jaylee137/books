@@ -1,13 +1,18 @@
-import Vue, { VNode } from 'vue'
+import type { IPC } from 'main/preload';
+import Vue, { VNode } from 'vue';
 
 declare global {
+  const ipc: IPC;
   namespace JSX {
-    // tslint:disable no-empty-interface
-    interface Element extends VNode {}
-    // tslint:disable no-empty-interface
-    interface ElementClass extends Vue {}
+    type Element = VNode;
+    type ElementClass = Vue;
     interface IntrinsicElements {
-      [elem: string]: any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      [elem: string]: any;
     }
+  }
+
+  interface Window {
+    ipc: IPC;
   }
 }

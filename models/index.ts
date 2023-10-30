@@ -7,10 +7,14 @@ import { Defaults } from './baseModels/Defaults/Defaults';
 import { Item } from './baseModels/Item/Item';
 import { JournalEntry } from './baseModels/JournalEntry/JournalEntry';
 import { JournalEntryAccount } from './baseModels/JournalEntryAccount/JournalEntryAccount';
+import { Misc } from './baseModels/Misc';
 import { Party } from './baseModels/Party/Party';
 import { Payment } from './baseModels/Payment/Payment';
 import { PaymentFor } from './baseModels/PaymentFor/PaymentFor';
+import { PriceList } from './baseModels/PriceList/PriceList';
+import { PriceListItem } from './baseModels/PriceList/PriceListItem';
 import { PrintSettings } from './baseModels/PrintSettings/PrintSettings';
+import { PrintTemplate } from './baseModels/PrintTemplate';
 import { PurchaseInvoice } from './baseModels/PurchaseInvoice/PurchaseInvoice';
 import { PurchaseInvoiceItem } from './baseModels/PurchaseInvoiceItem/PurchaseInvoiceItem';
 import { SalesInvoice } from './baseModels/SalesInvoice/SalesInvoice';
@@ -19,18 +23,17 @@ import { SetupWizard } from './baseModels/SetupWizard/SetupWizard';
 import { Tax } from './baseModels/Tax/Tax';
 import { TaxSummary } from './baseModels/TaxSummary/TaxSummary';
 import { Batch } from './inventory/Batch';
-import { SerialNumber } from './inventory/SerialNumber';
 import { InventorySettings } from './inventory/InventorySettings';
 import { Location } from './inventory/Location';
 import { PurchaseReceipt } from './inventory/PurchaseReceipt';
 import { PurchaseReceiptItem } from './inventory/PurchaseReceiptItem';
+import { SerialNumber } from './inventory/SerialNumber';
 import { Shipment } from './inventory/Shipment';
 import { ShipmentItem } from './inventory/ShipmentItem';
 import { StockLedgerEntry } from './inventory/StockLedgerEntry';
 import { StockMovement } from './inventory/StockMovement';
 import { StockMovementItem } from './inventory/StockMovementItem';
 
-import { PrintTemplate } from './baseModels/PrintTemplate';
 export const models = {
   Account,
   AccountingLedgerEntry,
@@ -41,10 +44,13 @@ export const models = {
   Item,
   JournalEntry,
   JournalEntryAccount,
+  Misc,
   Party,
   Payment,
   PaymentFor,
   PrintSettings,
+  PriceList,
+  PriceListItem,
   PurchaseInvoice,
   PurchaseInvoiceItem,
   SalesInvoice,

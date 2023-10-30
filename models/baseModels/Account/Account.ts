@@ -19,11 +19,15 @@ export class Account extends Doc {
   parentAccount?: string;
 
   get isDebit() {
-    const debitAccounts = [
-      AccountRootTypeEnum.Asset,
-      AccountRootTypeEnum.Expense,
-    ] as AccountRootType[];
-    return debitAccounts.includes(this.rootType!);
+    if (this.rootType === AccountRootTypeEnum.Asset) {
+      return true;
+    }
+
+    if (this.rootType === AccountRootTypeEnum.Expense) {
+      return true;
+    }
+
+    return false;
   }
 
   get isCredit() {
@@ -55,16 +59,13 @@ export class Account extends Doc {
       return;
     }
 
-    const account = await this.fyo.db.get(
-      'Account',
-      this.parentAccount as string
-    );
+    const account = await this.fyo.db.get('Account', this.parentAccount);
     this.accountType = account.accountType as AccountType;
   }
 
   static getListViewSettings(): ListViewSettings {
     return {
-      columns: ['name', 'parentAccount', 'rootType'],
+      columns: ['name', 'rootType', 'isGroup', 'parentAccount'],
     };
   }
 
@@ -100,7 +101,7 @@ export class Account extends Doc {
         isGroup: true,
       };
 
-      if (doc.rootType) {
+      if (doc?.rootType) {
         filter.rootType = doc.rootType as string;
       }
 

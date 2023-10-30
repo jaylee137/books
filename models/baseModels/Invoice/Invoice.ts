@@ -12,7 +12,6 @@ import { DEFAULT_CURRENCY } from 'fyo/utils/consts';
 import { ValidationError } from 'fyo/utils/errors';
 import { Transactional } from 'models/Transactional/Transactional';
 import { addItem, getExchangeRate, getNumberSeries } from 'models/helpers';
-import { InventorySettings } from 'models/inventory/InventorySettings';
 import { StockTransfer } from 'models/inventory/StockTransfer';
 import { validateBatch } from 'models/inventory/helpers';
 import { ModelNameEnum } from 'models/types';
@@ -35,6 +34,7 @@ export abstract class Invoice extends Transactional {
   party?: string;
   account?: string;
   currency?: string;
+  priceList?: string;
   netTotal?: Money;
   grandTotal?: Money;
   baseGrandTotal?: Money;
@@ -45,10 +45,12 @@ export abstract class Invoice extends Transactional {
   discountPercent?: number;
   discountAfterTax?: boolean;
   stockNotTransferred?: number;
+  backReference?: string;
 
   submitted?: boolean;
   cancelled?: boolean;
   makeAutoPayment?: boolean;
+  makeAutoStockTransfer?: boolean;
 
   get isSales() {
     return this.schemaName === 'SalesInvoice';
@@ -104,6 +106,18 @@ export abstract class Invoice extends Transactional {
     return null;
   }
 
+  get autoStockTransferLocation(): string | null {
+    const fieldname = this.isSales
+      ? 'shipmentLocation'
+      : 'purchaseReceiptLocation';
+    const value = this.fyo.singles.Defaults?.[fieldname];
+    if (typeof value === 'string' && value.length) {
+      return value;
+    }
+
+    return null;
+  }
+
   constructor(schema: Schema, data: DocValueMap, fyo: Fyo) {
     super(schema, data, fyo);
     this._setGetCurrencies();
@@ -129,13 +143,20 @@ export abstract class Invoice extends Transactional {
       outstandingAmount: this.baseGrandTotal!,
     });
 
-    const party = (await this.fyo.doc.getDoc('Party', this.party!)) as Party;
+    const party = (await this.fyo.doc.getDoc('Party', this.party)) as Party;
     await party.updateOutstandingAmount();
 
     if (this.makeAutoPayment && this.autoPaymentAccount) {
       const payment = this.getPayment();
       await payment?.sync();
       await payment?.submit();
+      await this.load();
+    }
+
+    if (this.makeAutoStockTransfer && this.autoStockTransferLocation) {
+      const stockTransfer = await this.getStockTransfer(true);
+      await stockTransfer?.sync();
+      await stockTransfer?.submit();
       await this.load();
     }
   }
@@ -160,7 +181,7 @@ export abstract class Invoice extends Transactional {
   async _updatePartyOutStanding() {
     const partyDoc = (await this.fyo.doc.getDoc(
       ModelNameEnum.Party,
-      this.party!
+      this.party
     )) as Party;
 
     await partyDoc.updateOutstandingAmount();
@@ -202,7 +223,7 @@ export abstract class Invoice extends Transactional {
       return 1.0;
     }
     const exchangeRate = await getExchangeRate({
-      fromCurrency: this.currency!,
+      fromCurrency: this.currency,
       toCurrency: currency as string,
     });
 
@@ -226,7 +247,7 @@ export abstract class Invoice extends Transactional {
         continue;
       }
 
-      const tax = await this.getTax(item.tax!);
+      const tax = await this.getTax(item.tax);
       for (const { account, rate } of (tax.details ?? []) as TaxDetail[]) {
         taxes[account] ??= {
           account,
@@ -235,7 +256,11 @@ export abstract class Invoice extends Transactional {
         };
 
         let amount = item.amount!;
-        if (this.enableDiscounting && !this.discountAfterTax) {
+        if (
+          this.enableDiscounting &&
+          !this.discountAfterTax &&
+          !item.itemDiscountedTotal?.isZero()
+        ) {
           amount = item.itemDiscountedTotal!;
         }
 
@@ -264,7 +289,7 @@ export abstract class Invoice extends Transactional {
   }
 
   async getTax(tax: string) {
-    if (!this._taxes![tax]) {
+    if (!this._taxes[tax]) {
       this._taxes[tax] = await this.fyo.doc.getDoc('Tax', tax);
     }
 
@@ -281,7 +306,7 @@ export abstract class Invoice extends Transactional {
     return itemDiscountAmount.add(invoiceDiscountAmount);
   }
 
-  async getGrandTotal() {
+  getGrandTotal() {
     const totalDiscount = this.getTotalDiscount();
     return ((this.taxes ?? []) as Doc[])
       .map((doc) => doc.amount as Money)
@@ -386,16 +411,15 @@ export abstract class Invoice extends Transactional {
       },
       dependsOn: ['party', 'currency'],
     },
-    netTotal: { formula: async () => this.getSum('items', 'amount', false) },
+    netTotal: { formula: () => this.getSum('items', 'amount', false) },
     taxes: { formula: async () => await this.getTaxSummary() },
-    grandTotal: { formula: async () => await this.getGrandTotal() },
+    grandTotal: { formula: () => this.getGrandTotal() },
     baseGrandTotal: {
-      formula: async () =>
-        (this.grandTotal as Money).mul(this.exchangeRate! ?? 1),
+      formula: () => (this.grandTotal as Money).mul(this.exchangeRate! ?? 1),
       dependsOn: ['grandTotal', 'exchangeRate'],
     },
     outstandingAmount: {
-      formula: async () => {
+      formula: () => {
         if (this.submitted) {
           return;
         }
@@ -404,7 +428,7 @@ export abstract class Invoice extends Transactional {
       },
     },
     stockNotTransferred: {
-      formula: async () => {
+      formula: () => {
         if (this.submitted) {
           return;
         }
@@ -415,6 +439,12 @@ export abstract class Invoice extends Transactional {
     },
     makeAutoPayment: {
       formula: () => !!this.autoPaymentAccount,
+      dependsOn: [],
+    },
+    makeAutoStockTransfer: {
+      formula: () =>
+        !!this.fyo.singles.AccountingSettings?.enableInventory &&
+        !!this.autoStockTransferLocation,
       dependsOn: [],
     },
   };
@@ -457,11 +487,18 @@ export abstract class Invoice extends Transactional {
         return true;
       }
 
-      if (!this.autoPaymentAccount) {
+      return !this.autoPaymentAccount;
+    },
+    makeAutoStockTransfer: () => {
+      if (this.submitted) {
         return true;
       }
 
-      return false;
+      if (!this.fyo.singles.AccountingSettings?.enableInventory) {
+        return true;
+      }
+
+      return !this.autoStockTransferLocation;
     },
     setDiscountAmount: () => true || !this.enableDiscounting,
     discountAmount: () =>
@@ -479,14 +516,20 @@ export abstract class Invoice extends Transactional {
     terms: () => !(this.terms || !(this.isSubmitted || this.isCancelled)),
     attachment: () =>
       !(this.attachment || !(this.isSubmitted || this.isCancelled)),
+    backReference: () => !this.backReference,
+    priceList: () => !this.fyo.singles.AccountingSettings?.enablePriceList,
   };
 
   static defaults: DefaultMap = {
     makeAutoPayment: (doc) =>
       doc instanceof Invoice && !!doc.autoPaymentAccount,
+    makeAutoStockTransfer: (doc) =>
+      !!doc.fyo.singles.AccountingSettings?.enableInventory &&
+      doc instanceof Invoice &&
+      !!doc.autoStockTransferLocation,
     numberSeries: (doc) => getNumberSeries(doc.schemaName, doc.fyo),
     terms: (doc) => {
-      const defaults = doc.fyo.singles.Defaults as Defaults | undefined;
+      const defaults = doc.fyo.singles.Defaults;
       if (doc.schemaName === ModelNameEnum.SalesInvoice) {
         return defaults?.salesInvoiceTerms ?? '';
       }
@@ -505,6 +548,10 @@ export abstract class Invoice extends Transactional {
       accountType: doc.isSales ? 'Receivable' : 'Payable',
     }),
     numberSeries: (doc: Doc) => ({ referenceType: doc.schemaName }),
+    priceList: (doc: Doc) => ({
+      isEnabled: true,
+      ...(doc.isSales ? { isSales: true } : { isPurchase: true }),
+    }),
   };
 
   static createFilters: FiltersMap = {
@@ -572,7 +619,7 @@ export abstract class Invoice extends Transactional {
     return this.fyo.doc.getNewDoc(ModelNameEnum.Payment, data) as Payment;
   }
 
-  async getStockTransfer(): Promise<StockTransfer | null> {
+  async getStockTransfer(isAuto = false): Promise<StockTransfer | null> {
     if (!this.isSubmitted) {
       return null;
     }
@@ -585,22 +632,31 @@ export abstract class Invoice extends Transactional {
 
     const defaults = (this.fyo.singles.Defaults as Defaults) ?? {};
     let terms;
+    let numberSeries;
     if (this.isSales) {
       terms = defaults.shipmentTerms ?? '';
+      numberSeries = defaults.shipmentNumberSeries ?? undefined;
     } else {
       terms = defaults.purchaseReceiptTerms ?? '';
+      numberSeries = defaults.purchaseReceiptNumberSeries ?? undefined;
     }
 
     const data = {
       party: this.party,
       date: new Date().toISOString(),
       terms,
+      numberSeries,
       backReference: this.name,
     };
 
-    const location =
-      (this.fyo.singles.InventorySettings as InventorySettings)
-        .defaultLocation ?? null;
+    let location = this.autoStockTransferLocation;
+    if (!location) {
+      location = this.fyo.singles.InventorySettings?.defaultLocation ?? null;
+    }
+
+    if (isAuto && !location) {
+      return null;
+    }
 
     const transfer = this.fyo.doc.getNewDoc(schemaName, data) as StockTransfer;
     for (const row of this.items ?? []) {
@@ -609,10 +665,16 @@ export abstract class Invoice extends Transactional {
       }
 
       const itemDoc = (await row.loadAndGetLink('item')) as Item;
+      if (isAuto && (itemDoc.hasBatch || itemDoc.hasSerialNumber)) {
+        continue;
+      }
+
       const item = row.item;
       const quantity = row.stockNotTransferred;
       const trackItem = itemDoc.trackItem;
       const batch = row.batch || null;
+      const description = row.description;
+      const hsnCode = row.hsnCode;
       let rate = row.rate as Money;
 
       if (this.exchangeRate && this.exchangeRate > 1) {
@@ -623,12 +685,28 @@ export abstract class Invoice extends Transactional {
         continue;
       }
 
+      if (isAuto) {
+        const stock =
+          (await this.fyo.db.getStockQuantity(
+            item,
+            location!,
+            undefined,
+            data.date
+          )) ?? 0;
+
+        if (stock < quantity) {
+          continue;
+        }
+      }
+
       await transfer.append('items', {
         item,
         quantity,
         location,
         rate,
         batch,
+        description,
+        hsnCode,
       });
     }
 

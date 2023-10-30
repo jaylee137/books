@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition>
       <!-- Backdrop -->
-      <div class="backdrop z-20 flex justify-center items-center" v-if="open">
+      <div v-if="open" class="backdrop z-20 flex justify-center items-center">
         <!-- Dialog -->
         <div
           class="
@@ -26,7 +26,16 @@
               :class="config.iconColor"
             />
           </div>
-          <p v-if="detail" class="text-base">{{ detail }}</p>
+
+          <template v-if="detail">
+            <p v-if="typeof detail === 'string'" class="text-base">
+              {{ detail }}
+            </p>
+
+            <div v-else v-for="d of detail">
+              <p class="text-base">{{ d }}</p>
+            </div>
+          </template>
           <div class="flex justify-end gap-4 mt-4">
             <Button
               v-for="(b, index) of buttons"
@@ -52,6 +61,19 @@ import Button from './Button.vue';
 import FeatherIcon from './FeatherIcon.vue';
 
 export default defineComponent({
+  components: { Button, FeatherIcon },
+  props: {
+    type: { type: String as PropType<ToastType>, default: 'info' },
+    title: { type: String, required: true },
+    detail: {
+      type: [String, Array] as PropType<string | string[]>,
+      required: false,
+    },
+    buttons: {
+      type: Array as PropType<DialogButton[]>,
+      required: true,
+    },
+  },
   setup() {
     return {
       primary: ref<InstanceType<typeof Button>[] | null>(null),
@@ -61,16 +83,9 @@ export default defineComponent({
   data() {
     return { open: false };
   },
-  props: {
-    type: { type: String as PropType<ToastType>, default: 'info' },
-    title: { type: String, required: true },
-    detail: {
-      type: String,
-      required: false,
-    },
-    buttons: {
-      type: Array as PropType<DialogButton[]>,
-      required: true,
+  computed: {
+    config() {
+      return getIconConfig(this.type);
     },
   },
   watch: {
@@ -88,11 +103,6 @@ export default defineComponent({
     });
 
     this.focusButton();
-  },
-  computed: {
-    config() {
-      return getIconConfig(this.type);
-    },
   },
   methods: {
     focusButton() {
@@ -133,7 +143,6 @@ export default defineComponent({
       this.open = false;
     },
   },
-  components: { Button, FeatherIcon },
 });
 </script>
 <style scoped>

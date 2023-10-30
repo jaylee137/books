@@ -1,14 +1,21 @@
-import { Fyo } from 'fyo';
+import { Fyo, t } from 'fyo';
 import { Doc } from 'fyo/model/doc';
 import { Invoice } from 'models/baseModels/Invoice/Invoice';
 import { ModelNameEnum } from 'models/types';
 import { FieldTypeEnum, Schema, TargetField } from 'schemas/types';
 import { getValueMapFromList } from 'utils/index';
 import { TemplateFile } from 'utils/types';
-import { getSavePath, getTemplates, makePDF } from './ipcCalls';
+import { showToast } from './interactive';
 import { PrintValues } from './types';
-import { getDocFromNameIfExistsElseNew } from './ui';
+import {
+  getDocFromNameIfExistsElseNew,
+  getSavePath,
+  showExportInFolder,
+} from './ui';
 
+export type PrintTemplateHint = {
+  [key: string]: string | PrintTemplateHint | PrintTemplateHint[];
+};
 type PrintTemplateData = Record<string, unknown>;
 type TemplateUpdateItem = { name: string; template: string; type: string };
 
@@ -20,8 +27,9 @@ const printSettingsFields = [
   'email',
   'phone',
   'address',
+  'companyName',
 ];
-const accountingSettingsFields = ['companyName', 'gstin'];
+const accountingSettingsFields = ['gstin'];
 
 export async function getPrintTemplatePropValues(
   doc: Doc
@@ -61,11 +69,11 @@ export async function getPrintTemplatePropValues(
 }
 
 export function getPrintTemplatePropHints(schemaName: string, fyo: Fyo) {
-  const hints: PrintTemplateData = {};
+  const hints: PrintTemplateHint = {};
   const schema = fyo.schemaMap[schemaName]!;
   hints.doc = getPrintTemplateDocHints(schema, fyo);
-  (hints.doc as PrintTemplateData).entryType = fyo.t`Entry Type`;
-  (hints.doc as PrintTemplateData).entryLabel = fyo.t`Entry Label`;
+  hints.doc.entryType = fyo.t`Entry Type`;
+  hints.doc.entryLabel = fyo.t`Entry Label`;
 
   const printSettingsHints = getPrintTemplateDocHints(
     fyo.schemaMap[ModelNameEnum.PrintSettings]!,
@@ -92,11 +100,12 @@ export function getPrintTemplatePropHints(schemaName: string, fyo: Fyo) {
 }
 
 function showHSN(doc: Doc): boolean {
-  if (!Array.isArray(doc.items)) {
+  const items = doc.items;
+  if (!Array.isArray(items)) {
     return false;
   }
 
-  return doc.items.map((i) => i.hsnCode).every(Boolean);
+  return items.map((i: Doc) => i.hsnCode).every(Boolean);
 }
 
 function formattedTotalDiscount(doc: Doc): string {
@@ -117,10 +126,10 @@ function getPrintTemplateDocHints(
   fyo: Fyo,
   fieldnames?: string[],
   linkLevel?: number
-): PrintTemplateData {
+): PrintTemplateHint {
   linkLevel ??= 0;
-  const hints: PrintTemplateData = {};
-  const links: PrintTemplateData = {};
+  const hints: PrintTemplateHint = {};
+  const links: PrintTemplateHint = {};
 
   let fields = schema.fields;
   if (fieldnames) {
@@ -212,14 +221,24 @@ async function getPrintTemplateDocValues(doc: Doc, fieldnames?: string[]) {
   return values;
 }
 
-export async function getPathAndMakePDF(name: string, innerHTML: string) {
-  const { filePath } = await getSavePath(name, 'pdf');
-  if (!filePath) {
+export async function getPathAndMakePDF(
+  name: string,
+  innerHTML: string,
+  width: number,
+  height: number
+) {
+  const { filePath: savePath } = await getSavePath(name, 'pdf');
+  if (!savePath) {
     return;
   }
 
   const html = constructPrintDocument(innerHTML);
-  await makePDF(html, filePath);
+  const success = await ipc.makePDF(html, savePath, width, height);
+  if (success) {
+    showExportInFolder(t`Save as PDF Successful`, savePath);
+  } else {
+    showToast({ message: t`Export Failed`, type: 'error' });
+  }
 }
 
 function constructPrintDocument(innerHTML: string) {
@@ -240,15 +259,14 @@ function constructPrintDocument(innerHTML: string) {
 }
 
 function getAllCSSAsStyleElem() {
-  const cssTexts = [];
+  const cssTexts: string[] = [];
   for (const sheet of document.styleSheets) {
     for (const rule of sheet.cssRules) {
       cssTexts.push(rule.cssText);
     }
 
-    // @ts-ignore
-    for (const rule of sheet.ownerRule ?? []) {
-      cssTexts.push(rule.cssText);
+    if (sheet.ownerRule) {
+      cssTexts.push(sheet.ownerRule.cssText);
     }
   }
 
@@ -258,7 +276,7 @@ function getAllCSSAsStyleElem() {
 }
 
 export async function updatePrintTemplates(fyo: Fyo) {
-  const templateFiles = await getTemplates();
+  const templateFiles = await ipc.getTemplates();
   const existingTemplates = (await fyo.db.getAll(ModelNameEnum.PrintTemplate, {
     fields: ['name', 'modified'],
     filters: { isCustom: false },
@@ -281,6 +299,8 @@ export async function updatePrintTemplates(fyo: Fyo) {
     updateList.push(...updates);
   }
 
+  const isLogging = fyo.store.skipTelemetryLogging;
+  fyo.store.skipTelemetryLogging = true;
   for (const { name, type, template } of updateList) {
     const doc = await getDocFromNameIfExistsElseNew(
       ModelNameEnum.PrintTemplate,
@@ -290,6 +310,7 @@ export async function updatePrintTemplates(fyo: Fyo) {
     await doc.set({ name, type, template, isCustom: false });
     await doc.sync();
   }
+  fyo.store.skipTelemetryLogging = isLogging;
 }
 
 function getPrintTemplateUpdateList(

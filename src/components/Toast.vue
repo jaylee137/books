@@ -16,7 +16,9 @@
           z-30
           bg-white
           rounded-lg
+          border
         "
+        :class="[config.containerBorder]"
         style="pointer-events: auto"
       >
         <feather-icon
@@ -24,7 +26,7 @@
           class="w-6 h-6 me-3"
           :class="config.iconColor"
         />
-        <div @click="actionClicked" :class="actionText ? 'cursor-pointer' : ''">
+        <div :class="actionText ? 'cursor-pointer' : ''" @click="actionClicked">
           <p class="text-base">{{ message }}</p>
           <button
             v-if="actionText"
@@ -50,21 +52,15 @@
   </Teleport>
 </template>
 <script lang="ts">
-import { getColorClass } from 'src/utils/colors';
 import { getIconConfig } from 'src/utils/interactive';
 import { ToastDuration, ToastType } from 'src/utils/types';
 import { toastDurationMap } from 'src/utils/ui';
-import { defineComponent, nextTick, PropType } from 'vue';
+import { PropType, defineComponent, nextTick } from 'vue';
 import FeatherIcon from './FeatherIcon.vue';
 
 export default defineComponent({
   components: {
     FeatherIcon,
-  },
-  data() {
-    return {
-      open: false,
-    };
   },
   props: {
     message: { type: String, required: true },
@@ -72,6 +68,11 @@ export default defineComponent({
     actionText: { type: String, default: '' },
     type: { type: String as PropType<ToastType>, default: 'info' },
     duration: { type: String as PropType<ToastDuration>, default: 'long' },
+  },
+  data() {
+    return {
+      open: false,
+    };
   },
   computed: {
     config() {

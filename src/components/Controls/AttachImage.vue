@@ -2,15 +2,15 @@
   <div
     class="relative bg-white border flex-center overflow-hidden group"
     :class="{
-      'rounded': size === 'form',
+      rounded: size === 'form',
       'w-20 h-20 rounded-full': size !== 'small' && size !== 'form',
       'w-12 h-12 rounded-full': size === 'small',
     }"
     :title="df?.label"
     :style="imageSizeStyle"
   >
-    <img :src="value" v-if="value" />
-    <div :class="[!isReadOnly ? 'group-hover:opacity-90' : '']" v-else>
+    <img v-if="value" :src="value" />
+    <div v-else :class="[!isReadOnly ? 'group-hover:opacity-90' : '']">
       <div
         v-if="letterPlaceholder"
         class="
@@ -57,7 +57,6 @@
 <script lang="ts">
 import { Field } from 'schemas/types';
 import { fyo } from 'src/initFyo';
-import { selectFile } from 'src/utils/ipcCalls';
 import { getDataURL } from 'src/utils/misc';
 import { defineComponent, PropType } from 'vue';
 import FeatherIcon from '../FeatherIcon.vue';
@@ -65,11 +64,23 @@ import Base from './Base.vue';
 
 export default defineComponent({
   name: 'AttachImage',
+  components: { FeatherIcon },
   extends: Base,
   props: {
     letterPlaceholder: { type: String, default: '' },
     value: { type: String, default: '' },
     df: { type: Object as PropType<Field> },
+  },
+  computed: {
+    imageSizeStyle() {
+      if (this.size === 'form') {
+        return { width: '135px', height: '135px' };
+      }
+      return {};
+    },
+    shouldClear() {
+      return !!this.value;
+    },
   },
   methods: {
     async handleClick() {
@@ -93,7 +104,7 @@ export default defineComponent({
         ],
       };
 
-      const { name, success, data } = await selectFile(options);
+      const { name, success, data } = await ipc.selectFile(options);
 
       if (!success) {
         return;
@@ -106,17 +117,5 @@ export default defineComponent({
       this.triggerChange(dataURL);
     },
   },
-  computed: {
-    imageSizeStyle() {
-      if (this.size === 'form') {
-        return { width: '135px', height: '135px' };
-      }
-      return {};
-    },
-    shouldClear() {
-      return !!this.value;
-    },
-  },
-  components: { FeatherIcon },
 });
 </script>

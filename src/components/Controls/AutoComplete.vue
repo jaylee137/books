@@ -1,14 +1,14 @@
 <template>
   <Dropdown :items="suggestions" :is-loading="isLoading" :df="df" :doc="doc">
     <template
-      v-slot="{
+      #default="{
         toggleDropdown,
         highlightItemUp,
         highlightItemDown,
         selectHighlightedItem,
       }"
     >
-      <div :class="labelClasses" v-if="showLabel">
+      <div v-if="showLabel" :class="labelClasses">
         {{ df.label }}
       </div>
       <div
@@ -25,6 +25,7 @@
           :value="linkValue"
           :placeholder="inputPlaceholder"
           :readonly="isReadOnly"
+          :tabindex="isReadOnly ? '-1' : '0'"
           @focus="(e) => !isReadOnly && onFocus(e, toggleDropdown)"
           @click="(e) => !isReadOnly && onFocus(e, toggleDropdown)"
           @blur="(e) => !isReadOnly && onBlur(e.target.value)"
@@ -34,7 +35,6 @@
           @keydown.enter="selectHighlightedItem"
           @keydown.tab="toggleDropdown(false)"
           @keydown.esc="toggleDropdown(false)"
-          :tabindex="isReadOnly ? '-1' : '0'"
         />
         <svg
           v-if="!isReadOnly && !canLink"
@@ -94,13 +94,13 @@ import QuickView from '../QuickView.vue';
 
 export default {
   name: 'AutoComplete',
-  emits: ['focus'],
-  extends: Base,
   components: {
     Dropdown,
     Popover,
     QuickView,
   },
+  extends: Base,
+  emits: ['focus'],
   data() {
     return {
       showQuickView: false,
@@ -109,24 +109,6 @@ export default {
       suggestions: [],
       highlightedIndex: -1,
     };
-  },
-  watch: {
-    value: {
-      immediate: true,
-      handler(newValue) {
-        this.setLinkValue(this.getLinkValue(newValue));
-      },
-    },
-  },
-  mounted() {
-    const value = this.linkValue || this.value;
-    this.setLinkValue(this.getLinkValue(value));
-  },
-  unmounted() {
-    this.showQuickView = false;
-  },
-  deactivated() {
-    this.showQuickView = false;
   },
   computed: {
     linkSchemaName() {
@@ -174,6 +156,24 @@ export default {
 
       return true;
     },
+  },
+  watch: {
+    value: {
+      immediate: true,
+      handler(newValue) {
+        this.setLinkValue(this.getLinkValue(newValue));
+      },
+    },
+  },
+  mounted() {
+    const value = this.linkValue || this.value;
+    this.setLinkValue(this.getLinkValue(value));
+  },
+  unmounted() {
+    this.showQuickView = false;
+  },
+  deactivated() {
+    this.showQuickView = false;
   },
   methods: {
     async routeToLinkedDoc() {
@@ -262,15 +262,15 @@ export default {
         return;
       }
 
-      if (label && this.suggestions.length === 0) {
+      if (this.suggestions.length === 0) {
         this.triggerChange(label);
         return;
       }
 
-      if (
-        label &&
-        !this.suggestions.map(({ label }) => label).includes(label)
-      ) {
+      const suggestion = this.suggestions.find((s) => s.label === label);
+      if (suggestion) {
+        this.setSuggestion(suggestion);
+      } else {
         const suggestions = await this.getSuggestions(label);
         this.setSuggestion(suggestions[0]);
       }

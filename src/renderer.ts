@@ -1,13 +1,10 @@
-import { ipcRenderer } from 'electron';
-import { ConfigKeys } from 'fyo/core/types';
-import { DateTime } from 'luxon';
-import { CUSTOM_EVENTS, IPC_ACTIONS } from 'utils/messages';
+import { CUSTOM_EVENTS } from 'utils/messages';
 import { UnexpectedLogObject } from 'utils/types';
 import { App as VueApp, createApp } from 'vue';
 import App from './App.vue';
 import Badge from './components/Badge.vue';
 import FeatherIcon from './components/FeatherIcon.vue';
-import { getErrorHandled, handleError, sendError } from './errorHandling';
+import { handleError, sendError } from './errorHandling';
 import { fyo } from './initFyo';
 import { outsideClickDirective } from './renderer/helpers';
 import registerIpcRendererListeners from './renderer/registerIpcRendererListeners';
@@ -15,20 +12,16 @@ import router from './router';
 import { stringifyCircular } from './utils';
 import { setLanguageMap } from './utils/language';
 
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
 (async () => {
-  const language = fyo.config.get(ConfigKeys.Language) as string;
+  const language = fyo.config.get('language') as string;
   if (language) {
     await setLanguageMap(language);
   }
   fyo.store.language = language || 'English';
 
-  ipcRenderer.send = getErrorHandled(ipcRenderer.send);
-  ipcRenderer.invoke = getErrorHandled(ipcRenderer.invoke);
-
   registerIpcRendererListeners();
-  const { isDevelopment, platform, version } = (await ipcRenderer.invoke(
-    IPC_ACTIONS.GET_ENV
-  )) as { isDevelopment: boolean; platform: string; version: string };
+  const { isDevelopment, platform, version } = await ipc.getEnv();
 
   fyo.store.isDevelopment = isDevelopment;
   fyo.store.appVersion = version;
@@ -70,16 +63,25 @@ import { setLanguageMap } from './utils/language';
 function setErrorHandlers(app: VueApp) {
   window.onerror = (message, source, lineno, colno, error) => {
     error = error ?? new Error('triggered in window.onerror');
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     handleError(true, error, { message, source, lineno, colno });
   };
 
   window.onunhandledrejection = (event: PromiseRejectionEvent) => {
-    const error = event.reason;
+    let error: Error;
+    if (event.reason instanceof Error) {
+      error = event.reason;
+    } else {
+      error = new Error(String(event.reason));
+    }
+
+    // eslint-disable-next-line no-console
     handleError(true, error).catch((err) => console.error(err));
   };
 
   window.addEventListener(CUSTOM_EVENTS.LOG_UNEXPECTED, (event) => {
     const details = (event as CustomEvent)?.detail as UnexpectedLogObject;
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     sendError(details);
   });
 
@@ -95,7 +97,9 @@ function setErrorHandlers(app: VueApp) {
       more.props = stringifyCircular(vm.$props ?? {}, true, true);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     handleError(false, err as Error, more);
+    // eslint-disable-next-line no-console
     console.error(err, vm, info);
   };
 }
@@ -109,10 +113,6 @@ function setOnWindow(isDevelopment: boolean) {
   window.router = router;
   // @ts-ignore
   window.fyo = fyo;
-  // @ts-ignore
-  window.DateTime = DateTime;
-  // @ts-ignore
-  window.ipcRenderer = ipcRenderer;
 }
 
 function getPlatformName(platform: string) {
