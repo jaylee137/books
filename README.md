@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+>
+> Frappe in search of a maintainer for Frappe Books. For more details check
+> this issue: [#775](https://github.com/frappe/books/issues/775)
+
+---
+
 <div align="center" markdown="1">
 
 ---

@@ -8,8 +8,10 @@ import {
 import { ModelNameEnum } from '../../models/types';
 import DatabaseCore from './core';
 import { BespokeFunction } from './types';
+import { DateTime } from 'luxon';
 import { DocItem, ReturnDocItem } from 'models/inventory/types';
 import { safeParseFloat } from 'utils/index';
+import { Money } from 'pesa';
 
 export class BespokeQueries {
   [key: string]: BespokeFunction;
@@ -185,7 +187,7 @@ export class BespokeQueries {
 
   static async getReturnBalanceItemsQty(
     db: DatabaseCore,
-    schemaName: string,
+    schemaName: ModelNameEnum,
     docName: string
   ): Promise<Record<string, ReturnDocItem> | undefined> {
     const returnDocNames = (
@@ -200,21 +202,41 @@ export class BespokeQueries {
       return;
     }
 
-    const returnedItems: DocItem[] = await db.knex!(`${schemaName}Item`)
-      .select('item', 'batch', 'serialNumber')
+    const returnedItemsQuery = db.knex!(`${schemaName}Item`)
       .sum({ quantity: 'quantity' })
-      .whereIn('parent', returnDocNames)
-      .groupBy('item', 'batch', 'serialNumber');
+      .whereIn('parent', returnDocNames);
 
+    const docItemsQuery = db.knex!(`${schemaName}Item`)
+      .where('parent', docName)
+      .sum({ quantity: 'quantity' });
+
+    if (
+      [ModelNameEnum.SalesInvoice, ModelNameEnum.PurchaseInvoice].includes(
+        schemaName
+      )
+    ) {
+      returnedItemsQuery.select('item', 'batch').groupBy('item', 'batch');
+      docItemsQuery.select('name', 'item', 'batch').groupBy('item', 'batch');
+    }
+
+    if (
+      [ModelNameEnum.Shipment, ModelNameEnum.PurchaseReceipt].includes(
+        schemaName
+      )
+    ) {
+      returnedItemsQuery
+        .select('item', 'batch', 'serialNumber')
+        .groupBy('item', 'batch', 'serialNumber');
+      docItemsQuery
+        .select('name', 'item', 'batch', 'serialNumber')
+        .groupBy('item', 'batch', 'serialNumber');
+    }
+
+    const returnedItems = (await returnedItemsQuery) as DocItem[];
     if (!returnedItems.length) {
       return;
     }
-
-    const docItems: DocItem[] = await db.knex!(`${schemaName}Item`)
-      .select('name', 'item', 'batch', 'serialNumber')
-      .where('parent', docName)
-      .groupBy('item', 'batch', 'serialNumber')
-      .sum({ quantity: 'quantity' });
+    const docItems = (await docItemsQuery) as DocItem[];
 
     const docItemsMap = BespokeQueries.#getDocItemMap(docItems);
     const returnedItemsMap = BespokeQueries.#getDocItemMap(returnedItems);
@@ -223,7 +245,6 @@ export class BespokeQueries {
       docItemsMap,
       returnedItemsMap
     );
-
     return returnBalanceItems;
   }
 
@@ -370,5 +391,60 @@ export class BespokeQueries {
       };
     }
     return returnBalanceItems;
+  }
+
+  static async getPOSTransactedAmount(
+    db: DatabaseCore,
+    fromDate: Date,
+    toDate: Date,
+    lastShiftClosingDate?: Date
+  ): Promise<Record<string, Money> | undefined> {
+    const sinvNamesQuery = db.knex!(ModelNameEnum.SalesInvoice)
+      .select('name')
+      .where('isPOS', true)
+      .andWhereBetween('date', [
+        DateTime.fromJSDate(fromDate).toSQLDate(),
+        DateTime.fromJSDate(toDate).toSQLDate(),
+      ]);
+
+    if (lastShiftClosingDate) {
+      sinvNamesQuery.andWhere(
+        'created',
+        '>',
+        DateTime.fromJSDate(lastShiftClosingDate).toUTC().toString()
+      );
+    }
+
+    const sinvNames = (await sinvNamesQuery).map(
+      (row: { name: string }) => row.name
+    );
+
+    if (!sinvNames.length) {
+      return;
+    }
+
+    const paymentEntryNames: string[] = (
+      await db.knex!(ModelNameEnum.PaymentFor)
+        .select('parent')
+        .whereIn('referenceName', sinvNames)
+    ).map((doc: { parent: string }) => doc.parent);
+
+    const groupedAmounts = (await db.knex!(ModelNameEnum.Payment)
+      .select('paymentMethod')
+      .whereIn('name', paymentEntryNames)
+      .groupBy('paymentMethod')
+      .sum({ amount: 'amount' })) as { paymentMethod: string; amount: Money }[];
+
+    const transactedAmounts = {} as { [paymentMethod: string]: Money };
+
+    if (!groupedAmounts) {
+      return;
+    }
+
+    for (const row of groupedAmounts) {
+      transactedAmounts[row.paymentMethod] = row.amount;
+    }
+
+    return transactedAmounts;
   }
 }
