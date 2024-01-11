@@ -1,8 +1,3 @@
-> [!IMPORTANT]
->
-> Frappe in search of a maintainer for Frappe Books. For more details check
-> this issue: [#775](https://github.com/frappe/books/issues/775)
-
 ---
 
 <div align="center" markdown="1">
@@ -134,29 +129,6 @@ If you want to contribute to Frappe Books, please check our [Contribution Guidel
 5. If you have accounting requirements, you can become an ardent user. 🙂
 
 If you want to contribute code then you can fork this repo, make changes and raise a PR. ([see how to](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork))
-
-## Links
-
-- [Telegram Group](https://t.me/frappebooks): Used for discussions and decisions regarding everything Frappe Books.
-- [GitHub Discussions](https://github.com/frappe/books/discussions): Used for discussions around a specific topic.
-- [Frappe Books Blog](https://tech.frappebooks.com/): Sporadically updated dev blog regarding the development of this project.
-
-## Translation Contributors
-
-| Language           | Contributors                                                                                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| French             | [DeepL](https://www.deepl.com/), [mael-chouteau](https://github.com/mael-chouteau), [joandreux](https://github.com/joandreux)                                    |
-| German             | [DeepL](https://www.deepl.com/), [barredterra](https://github.com/barredterra), [promexio](https://github.com/promexio), [C2H6-383](https://github.com/C2H6-383) |
-| Portuguese         | [DeepL](https://www.deepl.com/)                                                                                                                                  |
-| Arabic             | [taha2002](https://github.com/taha2002), [Faridget](https://github.com/faridget)                                                                                 |
-| Catalan            | Dídac E. Jiménez                                                                                                                                                 |
-| Dutch              | [FastAct](https://github.com/FastAct)                                                                                                                            |
-| Spanish            | [talmax1124](https://github.com/talmax1124), [delbertf](https://github.com/delbertf)                                                                             |
-| Gujarati           | [dhruvilxcode](https://github.com/dhruvilxcode), [4silvertooth](https://github.com/4silvertooth)                                                                 |
-| Korean             | [Isaac-Kwon](https://github.com/Isaac-Kwon)                                                                                                                      |
-| Simplified Chinese | [wcxu21](https://github.com/wcxu21), [wolone](https://github.com/wolone)                                                                                         |
-| Swedish            | [papplo](https://github.com/papplo)                                                                                                                              |
-| Turkish            | Eyuq, [XTechnology-TR](https://github.com/XTechnology-TR)                                                                                                        |
 
 ## License
 
