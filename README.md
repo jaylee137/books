@@ -66,17 +66,6 @@ Next, you will need to install [yarn](https://classic.yarnpkg.com/lang/en/docs/i
 Once you are through the Pre-requisites, you can run the following commands to
 setup Frappe Books for development and building:
 
-```bash
-# clone the repository
-git clone https://github.com/frappe/books.git
-
-# change directory
-cd books
-
-# install dependencies
-yarn
-```
-
 #### Development
 
 To run Frappe Books in development mode (with hot reload, etc):
