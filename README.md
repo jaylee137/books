@@ -90,14 +90,6 @@ visiting `chrome://inspect` while Frappe Books is running in dev mode.
 
 See more [here](https://www.electronjs.org/docs/latest/tutorial/debugging-main-process#external-debuggers).
 
-#### Build
-
-To build Frappe Books and create an installer:
-
-```bash
-# start the electron app
-yarn build
-```
 
 **Note: Build Target**
 By default the above command will build for your computer's operating system and
