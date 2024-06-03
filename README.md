@@ -51,7 +51,7 @@ page](https://frappebooks.com/download).
 ## Development
 
 Frappe Books is built on Vue.js and Electron. It is offline by default and uses
-a local SQLite file as the database
+a local SQLite file as the database.
 
 ### Pre-requisites
 
@@ -80,7 +80,7 @@ yarn dev
 When you run `yarn dev` electron will run immediately but the UI will take a
 couple of seconds to render this because of how dev mode works. Each file is
 individually served by the dev server. And there are many files that have to be
-sent.
+sent
 
 **Note: Debug Electron Main Process**
 
