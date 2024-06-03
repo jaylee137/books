@@ -51,7 +51,7 @@ page](https://frappebooks.com/download).
 ## Development
 
 Frappe Books is built on Vue.js and Electron. It is offline by default and uses
-a local SQLite file as the database.
+a local SQLite file as the database
 
 ### Pre-requisites
 
